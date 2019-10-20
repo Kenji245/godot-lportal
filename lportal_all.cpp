@@ -9,3 +9,4 @@
 #include "ldob.cpp"
 #include "lbound.cpp"
 #include "lbitfield_dynamic.cpp"
+#include "lhelper.cpp"

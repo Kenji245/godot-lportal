@@ -41,6 +41,7 @@ class LRoomManager : public Spatial {
 
 	friend class LRoom;
 	friend class LRoomConverter;
+	friend class LHelper;
 
 
 	// godot ID of the camera (which should be registered as a DOB to allow moving between rooms)
@@ -141,6 +142,7 @@ private:
 	void CreateDebug();
 	void DobChangeVisibility(Spatial * pDOB, const LRoom * pOld, const LRoom * pNew);
 	void ReleaseResources(bool bPrepareConvert);
+	void ShowAll(bool bShow);
 
 
 	// helper funcs
@@ -178,7 +180,7 @@ public:
 
 	// PUBLIC INTERFACE TO GDSCRIPT
 	// convert empties and meshes to rooms and portals
-	void rooms_convert();
+	void rooms_convert(bool bDeleteLights);
 
 	// free memory for current set of rooms, prepare for converting a new game level
 	void rooms_release();
@@ -190,6 +192,17 @@ public:
 	// get the Godot room that is associated with an LPortal room
 	// (can be used to find the name etc of a room ID returned by dob_update)
 	Node * rooms_get_room(int room_id);
+
+	// helper function to merge SOB meshes for producing lightmaps
+	bool rooms_merge_sobs(Node * pMergeMeshInstance);
+	bool rooms_unmerge_sobs(Node * pMergeMeshInstance);
+	bool rooms_transfer_uv2s(Node * pMeshInstance_From, Node * pMeshInstance_To);
+
+	// one function to do all the uv mapping and lightmap creation in one
+	// (for godot lightmap workflow)
+	MeshInstance * rooms_create_lightmap_proxy();
+
+//	bool rooms_unmerge_sobs(const PoolVector<Vector2> &uvs);
 
 	// turn on and off culling for debugging
 	void rooms_set_active(bool bActive);

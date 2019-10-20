@@ -81,7 +81,7 @@ public:
 	};
 
 	// this function calls everything else in the converter
-	void Convert(LRoomManager &manager);
+	void Convert(LRoomManager &manager, bool bDeleteLights);
 
 private:
 	int CountRooms();
@@ -96,7 +96,7 @@ private:
 	bool Convert_Bound(LRoom &lroom, MeshInstance * pMI);
 	void Convert_ShadowCasters();
 	void Convert_Lights();
-	void Convert_HideAll();
+//	void Convert_HideAll();
 
 
 	void LRoom_DetectPortalMeshes(LRoom &lroom, LTempRoom &troom);
@@ -138,4 +138,6 @@ private:
 
 	bool Bound_AddPlaneIfUnique(LVector<Plane> &planes, const Plane &p);
 
+
+	bool m_bDeleteLights;
 };

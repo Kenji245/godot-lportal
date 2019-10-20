@@ -32,12 +32,33 @@
 
 
 
-void LRoomConverter::Convert(LRoomManager &manager)
+void LRoomConverter::Convert(LRoomManager &manager, bool bDeleteLights)
 {
+
+
+	m_bDeleteLights = bDeleteLights;
+
 	// This just is simply used to set how much debugging output .. more during conversion, less during running
 	// except when requested by explicitly clearing this flag.
 	Lawn::LDebug::m_bRunning = false;
+
+	// test pool vector
+//	PoolVector<Vector2> arr;
+//	arr.append(Vector2(0, 0));
+//	arr.append(Vector2(1, 0));
+//	arr.append(Vector2(2, 0));
+//	arr.insert(1, arr[1]);
+
+//	LPRINT(5, "DEBUG POOLVECTOR");
+//	for (int n=0; n<arr.size(); n++)
+//	{
+//		LPRINT(2, String(Variant(arr[n])));
+//	}
+
+
 	LPRINT(5, "running convert");
+
+
 
 	LMAN = &manager;
 
@@ -77,7 +98,7 @@ void LRoomConverter::Convert(LRoomManager &manager)
 	Convert_ShadowCasters();
 
 	// hide all in preparation for first frame
-	Convert_HideAll();
+	//LMAN->ShowAll(false);
 
 	// temp rooms no longer needed
 	m_TempRooms.clear(true);
@@ -339,23 +360,23 @@ bool LRoomConverter::Convert_Bound(LRoom &lroom, MeshInstance * pMI)
 }
 
 // hide all in preparation for first frame
-void LRoomConverter::Convert_HideAll()
-{
-	for (int n=0; n<LMAN->m_SOBs.size(); n++)
-	{
-		LSob &sob = LMAN->m_SOBs[n];
-		sob.Show(false);
-	}
+//void LRoomConverter::Convert_HideAll()
+//{
+//	for (int n=0; n<LMAN->m_SOBs.size(); n++)
+//	{
+//		LSob &sob = LMAN->m_SOBs[n];
+//		sob.Show(false);
+//	}
 
-	// hide all lights that are non global
-	for (int n=0; n<LMAN->m_Lights.size(); n++)
-	{
-		LLight &light = LMAN->m_Lights[n];
-		if (!light.IsGlobal())
-			light.Show(false);
-	}
+//	// hide all lights that are non global
+//	for (int n=0; n<LMAN->m_Lights.size(); n++)
+//	{
+//		LLight &light = LMAN->m_Lights[n];
+//		if (!light.IsGlobal())
+//			light.Show(false);
+//	}
 
-}
+//}
 
 void LRoomConverter::Convert_Lights()
 {
@@ -1057,63 +1078,15 @@ void LRoomConverter::LRoom_DetectedLight(LRoom &lroom, Node * pNode)
 	Light * pLight = Object::cast_to<Light>(pNode);
 	assert (pLight);
 
-	LMAN->LightCreate(pLight, lroom.m_RoomID);
-	/*
-	// create new light
-	LLight l;
-	l.SetDefaults();
-	l.m_GodotID = pLight->get_instance_id();
-	// direction
-	Transform tr = pLight->get_global_transform();
-	l.m_ptPos = tr.origin;
-	l.m_ptDir = -tr.basis.get_axis(2); // or possibly get_axis .. z is what we want
-	l.m_fMaxDist = pLight->get_param(Light::PARAM_SHADOW_MAX_DISTANCE);
-
-	// source room ID
-	l.m_RoomID = lroom.m_RoomID;
-
-	bool bOK = false;
-
-	// what kind of light?
-	SpotLight * pSL = Object::cast_to<SpotLight>(pNode);
-	if (pSL)
+	if (m_bDeleteLights)
 	{
-		LPRINT(2, "\tSPOTLIGHT detected " + pNode->get_name());
-		l.m_eType = LLight::LT_SPOTLIGHT;
-		l.m_fSpread = pSL->get_param(Light::PARAM_SPOT_ANGLE);
-
-		bOK = true;
+		// delete light now we are using lightmaps for test
+		pLight->queue_delete();
 	}
-
-	OmniLight * pOL = Object::cast_to<OmniLight>(pNode);
-	if (pOL)
+	else
 	{
-		LPRINT(2, "\tOMNILIGHT detected " + pNode->get_name());
-		l.m_eType = LLight::LT_OMNI;
-		bOK = true;
+		LMAN->LightCreate(pLight, lroom.m_RoomID);
 	}
-
-	DirectionalLight * pDL = Object::cast_to<DirectionalLight>(pNode);
-	if (pDL)
-	{
-		LPRINT(2, "\tDIRECTIONALLIGHT detected " + pNode->get_name());
-		l.m_eType = LLight::LT_DIRECTIONAL;
-		bOK = true;
-	}
-
-	// don't add if not recognised
-	if (!bOK)
-	{
-		LPRINT(2, "\tLIGHT type unrecognised " + pNode->get_name());
-		return;
-	}
-
-
-	// turn the local light off to start with
-	pLight->hide();
-
-	LMAN->m_Lights.push_back(l);
-	*/
 }
 
 // found a portal mesh! create a matching LPortal
@@ -1134,6 +1107,7 @@ void LRoomConverter::LRoom_DetectedPortalMesh(LRoom &lroom, LTempRoom &troom, Me
 	Ref<Mesh> rmesh = pMeshInstance->get_mesh();
 	Array arrays = rmesh->surface_get_arrays(0);
 	PoolVector<Vector3> p_vertices = arrays[VS::ARRAY_VERTEX];
+
 
 	// create a new LPortal to fill with this wonderful info
 	LPortal &lport = *troom.m_Portals.request();

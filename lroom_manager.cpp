@@ -26,7 +26,9 @@
 #include "ldebug.h"
 #include "scene/3d/immediate_geometry.h"
 #include "scene/3d/light.h"
+#include "scene/3d/baked_lightmap.h"
 #include "lroom.h"
+#include "lhelper.h"
 
 LRoomManager::LRoomManager()
 {
@@ -673,6 +675,26 @@ void LRoomManager::rooms_set_debug_planes(bool bActive)
 }
 
 
+// move the initial hiding to where the camera is set, so we can save the scene etc
+void LRoomManager::ShowAll(bool bShow)
+{
+	for (int n=0; n<m_SOBs.size(); n++)
+	{
+		LSob &sob = m_SOBs[n];
+		sob.Show(bShow);
+	}
+
+	// hide all lights that are non global
+	for (int n=0; n<m_Lights.size(); n++)
+	{
+		LLight &light = m_Lights[n];
+		if (!light.IsGlobal())
+			light.Show(bShow);
+	}
+
+}
+
+
 // turn on and off culling for debugging
 void LRoomManager::rooms_set_active(bool bActive)
 {
@@ -736,6 +758,10 @@ void LRoomManager::rooms_log_frame()
 
 void LRoomManager::rooms_set_camera(Node * pCam)
 {
+	// is it the first setting of the camera? if so hide all
+	if (m_ID_camera == 0)
+		ShowAll(false);
+
 	m_ID_camera = 0;
 
 	if (!pCam)
@@ -759,11 +785,73 @@ void LRoomManager::rooms_set_camera(Node * pCam)
 }
 
 // convert empties and meshes to rooms and portals
-void LRoomManager::rooms_convert()
+void LRoomManager::rooms_convert(bool bDeleteLights)
 {
 	LRoomConverter conv;
-	conv.Convert(*this);
+	conv.Convert(*this, bDeleteLights);
 }
+
+bool LRoomManager::rooms_transfer_uv2s(Node * pMeshInstance_From, Node * pMeshInstance_To)
+{
+	MeshInstance * pMI_from = Object::cast_to<MeshInstance>(pMeshInstance_From);
+	MeshInstance * pMI_to = Object::cast_to<MeshInstance>(pMeshInstance_To);
+
+	if (!pMI_from)
+		return false;
+	if (!pMI_to)
+		return false;
+
+	LHelper helper;
+	Lawn::LDebug::m_bRunning = false;
+	bool res = helper.TransferUV2(*pMI_from, *pMI_to);
+	Lawn::LDebug::m_bRunning = true;
+	return res;
+}
+
+
+bool LRoomManager::rooms_unmerge_sobs(Node * pMergeMeshInstance)
+//bool LRoomManager::rooms_unmerge_sobs(const PoolVector<Vector2> &uvs)
+{
+	MeshInstance * pMI = Object::cast_to<MeshInstance>(pMergeMeshInstance);
+
+	LHelper helper;
+	Lawn::LDebug::m_bRunning = false;
+//	bool res = helper.UnMergeSOBs(*this, uvs);
+	bool res = helper.UnMergeSOBs(*this, pMI);
+	Lawn::LDebug::m_bRunning = true;
+	return res;
+}
+
+
+MeshInstance * LRoomManager::rooms_create_lightmap_proxy()
+//bool LRoomManager::rooms_create_lightmap(Node * pBakedLightmap)
+{
+//	BakedLightmap * pBL = Object::cast_to<BakedLightmap>(pBakedLightmap);
+//	if (!pBL)
+//	{
+//		LWARN(5, "LRoomManager::rooms_create_lightmap : argument is not a baked lightmap");
+//		return false;
+//	}
+
+	LHelper helper;
+	Lawn::LDebug::m_bRunning = false;
+	MeshInstance * pMI = helper.CreateLightmapProxy(*this);
+	Lawn::LDebug::m_bRunning = true;
+	return pMI;
+}
+
+
+bool LRoomManager::rooms_merge_sobs(Node * pMergeMeshInstance)
+{
+	MeshInstance * pMI = Object::cast_to<MeshInstance>(pMergeMeshInstance);
+
+	LHelper helper;
+	Lawn::LDebug::m_bRunning = false;
+	bool res = helper.MergeSOBs(*this, pMI);
+	Lawn::LDebug::m_bRunning = true;
+	return res;
+}
+
 
 // free memory for current set of rooms, prepare for converting a new game level
 void LRoomManager::rooms_release()
@@ -1237,6 +1325,13 @@ void LRoomManager::_bind_methods()
 
 	ClassDB::bind_method(D_METHOD("rooms_set_camera"), &LRoomManager::rooms_set_camera);
 	ClassDB::bind_method(D_METHOD("rooms_get_room"), &LRoomManager::rooms_get_room);
+
+	ClassDB::bind_method(D_METHOD("rooms_create_lightmap_proxy"), &LRoomManager::rooms_create_lightmap_proxy);
+
+	ClassDB::bind_method(D_METHOD("rooms_merge_sobs"), &LRoomManager::rooms_merge_sobs);
+	ClassDB::bind_method(D_METHOD("rooms_unmerge_sobs"), &LRoomManager::rooms_unmerge_sobs);
+	ClassDB::bind_method(D_METHOD("rooms_transfer_uv2s"), &LRoomManager::rooms_transfer_uv2s);
+
 
 	// debugging
 	ClassDB::bind_method(D_METHOD("rooms_set_logging"), &LRoomManager::rooms_set_logging);
