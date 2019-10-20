@@ -73,24 +73,50 @@ bool LHelper::UnMergeSOBs(LRoomManager &manager, const PoolVector<Vector2> &uv2s
 // main function for getting merged uv2 back to sobs
 bool LHelper::TransferUV2(const MeshInstance &mi_from, MeshInstance &mi_to)
 {
-	// some godot jiggery pokery to get the mesh verts in local space
-	Ref<Mesh> rmesh = mi_from.get_mesh();
+	LMerged merged;
+	if (!FillMergedFromMesh(merged, mi_from))
+		return false;
+
+	return UnMerge_SOB(mi_to, merged);
+}
+
+
+bool LHelper::FillMergedFromMesh(LMerged &merged, const MeshInstance &mesh)
+{
+	Ref<Mesh> rmesh = mesh.get_mesh();
 	Array arrays = rmesh->surface_get_arrays(0);
 
-	PoolVector<Vector3> p_verts = arrays[VS::ARRAY_VERTEX];
-	PoolVector<Vector3> p_norms = arrays[VS::ARRAY_NORMAL];
-	PoolVector<int> p_inds = arrays[VS::ARRAY_INDEX];
 
-	PoolVector<Vector2> p_UV2s = arrays[VS::ARRAY_TEX_UV2];
-	if (p_UV2s.size() == 0)
+	merged.m_Verts = arrays[VS::ARRAY_VERTEX];
+	merged.m_Norms = arrays[VS::ARRAY_NORMAL];
+	merged.m_UV2s = arrays[VS::ARRAY_TEX_UV2];
+	merged.m_Inds = arrays[VS::ARRAY_INDEX];
+	//	PoolVector<Vector2> p_UV1s = arrays[VS::ARRAY_TEX_UV];
+
+	merged.m_nFaces = merged.m_Inds.size() / 3;
+
+	if (merged.m_UV2s.size() == 0)
 	{
-		LWARN(5, "TransferUVS :  mesh has no secondary UVs");
+		LWARN(5, "Merged mesh has no secondary UVs");
 		return false;
 	}
 
-	int uv_count = 0;
+	int miCount = 0;
+	for (int mf=0; mf<merged.m_nFaces; mf++)
+	{
+		// construct merged lface
+		LFace mlf;
+		for (int c=0; c<3; c++)
+		{
+			int ind = merged.m_Inds[miCount++];
+			mlf.m_Pos[c] = merged.m_Verts[ind];
+			mlf.m_Norm[c] = merged.m_Norms[ind].normalized();
+			mlf.m_index[c] = ind;
+		}
+		merged.m_LFaces.push_back(mlf);
+	}
 
-	return UnMerge_SOB(mi_to, p_verts, p_norms, p_UV2s, p_inds, uv_count);
+	return true;
 }
 
 
@@ -103,34 +129,9 @@ bool LHelper::UnMergeSOBs(LRoomManager &manager, MeshInstance * pMerged)
 		return false;
 	}
 
-	// some godot jiggery pokery to get the mesh verts in local space
-	Ref<Mesh> rmesh = pMerged->get_mesh();
-	Array arrays = rmesh->surface_get_arrays(0);
-
-	PoolVector<Vector3> p_verts = arrays[VS::ARRAY_VERTEX];
-	PoolVector<Vector3> p_norms = arrays[VS::ARRAY_NORMAL];
-	PoolVector<int> p_inds = arrays[VS::ARRAY_INDEX];
-
-//	PoolVector<Vector2> p_UV1s = arrays[VS::ARRAY_TEX_UV];
-	PoolVector<Vector2> p_UV2s = arrays[VS::ARRAY_TEX_UV2];
-	if (p_UV2s.size() == 0)
-	{
-		LWARN(5, "Merged mesh has no secondary UVs");
+	LMerged merged;
+	if (!FillMergedFromMesh(merged, *pMerged))
 		return false;
-	}
-
-
-//	assert (p_UV1s.size() == p_UV2s.size());
-
-//	// debug show the UV1s
-//	for (int n=0; n<p_UV1s.size(); n++)
-//	{
-//		LPRINT(2, "UV1 " + itos(n) + " : " + String(Variant(p_UV1s[n])));
-//	}
-
-
-
-	int uv_count = 0;
 
 	// go through each sob mesh
 	for (int n=0; n<manager.m_SOBs.size(); n++)
@@ -144,7 +145,7 @@ bool LHelper::UnMergeSOBs(LRoomManager &manager, MeshInstance * pMerged)
 		if (!pMI)
 			continue;
 
-		if (UnMerge_SOB(*pMI, p_verts, p_norms, p_UV2s, p_inds, uv_count) == false)
+		if (UnMerge_SOB(*pMI, merged) == false)
 			return false;
 	}
 
@@ -188,13 +189,18 @@ bool LHelper::DoFaceVertsApproxMatch(const LFace& sob_f, const LFace &m_face, in
 
 bool LHelper::DoPosNormsApproxMatch(const Vector3 &a_pos, const Vector3 &a_norm, const Vector3 &b_pos, const Vector3 &b_norm) const
 {
+	float x_diff = fabs (b_pos.x - a_pos.x);
+	if (x_diff > 0.2f)
+		return false;
+
+
 	Vector3 pos_diff = b_pos - a_pos;
 	if (pos_diff.length_squared() > 0.1f)
 		return false;
 
 	// make sure both are normalized
-	Vector3 na = a_norm.normalized();
-	Vector3 nb = b_norm.normalized();
+	Vector3 na = a_norm;//.normalized();
+	Vector3 nb = b_norm;//.normalized();
 
 	float norm_dot = na.dot(nb);
 	if (norm_dot < 0.95f)
@@ -259,9 +265,8 @@ int LHelper::FindOrAddVert(LVector<LVert> &uni_verts, const LVert &vert) const
 }
 
 
-//bool LHelper::UnMerge_SOB(MeshInstance &mi, const PoolVector<Vector2> &merged_uv1s, const PoolVector<Vector2> &merged_uv2s, int &vert_count)
-bool LHelper::UnMerge_SOB(MeshInstance &mi, const PoolVector<Vector3> merged_verts, const PoolVector<Vector3> merged_norms, const PoolVector<Vector2> &merged_uv2s, const PoolVector<int> &merged_inds, int &vert_count)
-//bool LHelper::UnMerge_SOB(MeshInstance &mi, const PoolVector<Vector2> &merged_uv2s, int &vert_count)
+//bool LHelper::UnMerge_SOB(MeshInstance &mi, const PoolVector<Vector3> merged_verts, const PoolVector<Vector3> merged_norms, const PoolVector<Vector2> &merged_uv2s, const PoolVector<int> &merged_inds, int &vert_count)
+bool LHelper::UnMerge_SOB(MeshInstance &mi, LMerged &merged)
 {
 	//LPRINT(2, "UnMerge_SOB " + mi.get_name());
 
@@ -289,41 +294,8 @@ bool LHelper::UnMerge_SOB(MeshInstance &mi, const PoolVector<Vector3> merged_ver
 	int nFaces = inds.size() / 3;
 	int iCount = 0;
 
-	int nMergedFaces = merged_inds.size() / 3;
+	int nMergedFaces = merged.m_nFaces;
 
-/*
-	// debug
-	int nDebugFaces = nFaces;
-	if (nMergedFaces < nDebugFaces)
-		nDebugFaces = nMergedFaces;
-	for (int f=0; f<nDebugFaces; f++)
-	{
-		String sz = "\tface " + itos(f);
-
-		LFace lf;
-		LFace mlf;
-
-		for (int c=0; c<3; c++)
-		{
-			int ind = inds[iCount];
-			lf.m_Pos[c] = world_verts[ind];
-			lf.m_Norm[c] = world_norms[ind];
-
-			ind = merged_inds[iCount];
-			mlf.m_Pos[c] = merged_verts[ind];
-			mlf.m_Norm[c] = merged_norms[ind];
-
-			iCount++;
-		}
-
-
-		LPRINT(2, sz);
-		sz = lf.ToString();
-		LPRINT(2, "lf " + sz);
-		sz = mlf.ToString();
-		LPRINT(2, "mlf " + sz);
-	}
-	*/
 
 	iCount = 0;
 
@@ -347,21 +319,21 @@ bool LHelper::UnMerge_SOB(MeshInstance &mi, const PoolVector<Vector3> merged_ver
 		}
 
 		// find matching face
-		int miCount = 0;
+//		int miCount = 0;
 		bool bMatchFound = false;
 
 		for (int mf=0; mf<nMergedFaces; mf++)
 		{
 			// construct merged lface
-			LFace mlf;
-			for (int c=0; c<3; c++)
-			{
-				int ind = merged_inds[miCount++];
-				mlf.m_Pos[c] = merged_verts[ind];
-				mlf.m_Norm[c] = merged_norms[ind];
+			const LFace &mlf = merged.m_LFaces[mf];
+//			for (int c=0; c<3; c++)
+//			{
+//				int ind = merged.m_Inds[miCount++];
+//				mlf.m_Pos[c] = merged.m_Verts[ind];
+//				mlf.m_Norm[c] = merged.m_Norms[ind];
 
-				mlf.m_index[c] = ind;
-			}
+//				mlf.m_index[c] = ind;
+//			}
 
 			int match = DoFacesMatch(lf, mlf);
 			if (match != -1)
@@ -375,7 +347,7 @@ bool LHelper::UnMerge_SOB(MeshInstance &mi, const PoolVector<Vector3> merged_ver
 				Vector2 found_uvs[3];
 				for (int c=0; c<3; c++)
 				{
-					found_uvs[c] = merged_uv2s[mlf.m_index[c]];
+					found_uvs[c] = merged.m_UV2s[mlf.m_index[c]];
 				}
 
 				// add them
@@ -774,6 +746,8 @@ void LHelper::Transform_Norms(const PoolVector<Vector3> &normsLocal, PoolVector<
 		Vector3 ptNormWorldB = tr.xform(normsLocal[n]);
 
 		Vector3 ptNorm = ptNormWorldB - ptNormWorldA;
+
+		ptNorm = ptNorm.normalized();
 
 		normsWorld.push_back(ptNorm);
 	}

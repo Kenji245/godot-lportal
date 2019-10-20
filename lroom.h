@@ -100,7 +100,7 @@ public:
 	const String &get_name() const {return m_szName;}
 
 	// main function
-	void DetermineVisibility_Recursive(LRoomManager &manager, int depth, const LCamera &cam, const LVector<Plane> &planes, int portalID_from = -1);
+	void DetermineVisibility_Recursive(LRoomManager &manager, int depth, const LCamera &cam, const LVector<Plane> &planes, int first_portal_plane = 1);
 	void FirstTouch(LRoomManager &manager);
 
 

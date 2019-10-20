@@ -25,6 +25,20 @@ public:
 		bool ApproxEqual(const LVert &o) const;
 	};
 
+	// the merged mesh data to be passed for unmerging meshes
+	struct LMerged
+	{
+		PoolVector<Vector3> m_Verts;
+		PoolVector<Vector3> m_Norms;
+		PoolVector<Vector2> m_UV2s;
+		PoolVector<int> m_Inds;
+
+		int m_nFaces;
+
+		// precreate LFaces
+		LVector<LFace> m_LFaces;
+	};
+
 	// one function to do the whole internal workflow
 	MeshInstance * CreateLightmapProxy(LRoomManager &manager);
 
@@ -42,7 +56,7 @@ public:
 private:
 	void Merge_MI(const MeshInstance &mi, PoolVector<Vector3> &verts, PoolVector<Vector3> &norms, PoolVector<int> &inds);
 
-	bool UnMerge_SOB(MeshInstance &mi, const PoolVector<Vector3> merged_verts, const PoolVector<Vector3> merged_norms, const PoolVector<Vector2> &merged_uv2s, const PoolVector<int> &merged_inds, int &vert_count);
+	bool UnMerge_SOB(MeshInstance &mi, LMerged &merged);
 
 	unsigned int FindMatchingVertex(const PoolVector<Vector2> &uvs, const Vector2 &uv1) const;
 
@@ -64,5 +78,6 @@ private:
 
 	void SetOwnerRecursive(Node * pNode, Node * pOwner);
 
+	bool FillMergedFromMesh(LMerged &merged, const MeshInstance &mesh);
 //	bool xatlas_mesh_lightmap_unwrap(float p_texel_size, const float *p_vertices, const float *p_normals, int p_vertex_count, const int *p_indices, const int *p_face_materials, int p_index_count, float **r_uv, int **r_vertex, int *r_vertex_count, int **r_index, int *r_index_count, int *r_size_hint_x, int *r_size_hint_y);
 };
