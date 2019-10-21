@@ -32,10 +32,9 @@
 
 
 
-void LRoomConverter::Convert(LRoomManager &manager, bool bDeleteLights)
+void LRoomConverter::Convert(LRoomManager &manager, bool bPreparationRun, bool bDeleteLights)
 {
-
-
+	m_bFinalRun = bPreparationRun == false;
 	m_bDeleteLights = bDeleteLights;
 
 	// This just is simply used to set how much debugging output .. more during conversion, less during running
@@ -209,7 +208,8 @@ void LRoomConverter::Convert_Room_FindObjects_Recursive(Node * pParent, LRoom &l
 			LRoom_PushBackSOB(lroom, sob);
 
 			// take away layer 0 from the sob, so it can be culled effectively
-			pVI->set_layer_mask(0);
+			if (m_bFinalRun)
+				pVI->set_layer_mask(0);
 		}
 		else
 		{
@@ -662,6 +662,7 @@ void LRoomConverter::Convert_Bounds()
 				// delete the mesh
 				pGRoom->remove_child(pChild);
 				pChild->queue_delete();
+				break;
 			}
 		}
 
@@ -1010,32 +1011,36 @@ void LRoomConverter::LRoom_DetectPortalMeshes(LRoom &lroom, LTempRoom &troom)
 		}
 	}
 
-	// we need an enclosing while loop because we might be deleting children and mucking up the iterator
-	bool bDetectedOne = true;
-
-	while (bDetectedOne)
+	// delete portal meshes
+	if (m_bFinalRun)
+//	if (true)
 	{
-		bDetectedOne = false;
+		// we need an enclosing while loop because we might be deleting children and mucking up the iterator
+		bool bDetectedOne = true;
 
-		for (int n=0; n<pGRoom->get_child_count(); n++)
+		while (bDetectedOne)
 		{
-			Node * pChild = pGRoom->get_child(n);
+			bDetectedOne = false;
 
-			if (Node_IsPortal(pChild))
+			for (int n=0; n<pGRoom->get_child_count(); n++)
 			{
-				// delete the original child, as it is no longer needed at runtime (except maybe for debugging .. NYI?)
-				//	pMeshInstance->hide();
-				pChild->get_parent()->remove_child(pChild);
-				pChild->queue_delete();
+				Node * pChild = pGRoom->get_child(n);
 
-				bDetectedOne = true;
-			}
+				if (Node_IsPortal(pChild))
+				{
+					// delete the original child, as it is no longer needed at runtime (except maybe for debugging .. NYI?)
+					//	pMeshInstance->hide();
+					pChild->get_parent()->remove_child(pChild);
+					pChild->queue_delete();
+					bDetectedOne = true;
+				}
 
-			if (bDetectedOne)
-				break;
-		} // for loop
+				if (bDetectedOne)
+					break;
+			} // for loop
 
-	} // while
+		} // while
+	} // if we want to delete portal meshes
 
 }
 
@@ -1080,11 +1085,13 @@ void LRoomConverter::LRoom_DetectedLight(LRoom &lroom, Node * pNode)
 
 	if (m_bDeleteLights)
 	{
+		LPRINT(2, "Deleting Light : " + pLight->get_name());
 		// delete light now we are using lightmaps for test
 		pLight->queue_delete();
 	}
 	else
 	{
+		LPRINT(2, "Detected Light : " + pLight->get_name());
 		LMAN->LightCreate(pLight, lroom.m_RoomID);
 	}
 }

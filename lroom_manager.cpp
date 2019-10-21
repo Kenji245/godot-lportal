@@ -29,6 +29,7 @@
 #include "scene/3d/baked_lightmap.h"
 #include "lroom.h"
 #include "lhelper.h"
+#include "lscene_saver.h"
 
 LRoomManager::LRoomManager()
 {
@@ -200,6 +201,7 @@ void LRoomManager::CreateDebug()
 	ImmediateGeometry * p = memnew(ImmediateGeometry);
 	p->set_name("debug_planes");
 	add_child(p);
+	move_child(p, get_child_count()-1);
 
 	m_ID_DebugPlanes = p->get_instance_id();
 
@@ -219,6 +221,7 @@ void LRoomManager::CreateDebug()
 	ImmediateGeometry * b = memnew(ImmediateGeometry);
 	b->set_name("debug_bounds");
 	add_child(b);
+	move_child(b, get_child_count()-1);
 	m_ID_DebugBounds = b->get_instance_id();
 	m_mat_Debug_Bounds = Ref<SpatialMaterial>(memnew(SpatialMaterial));
 	//m_mat_Debug_Bounds->set_flag(SpatialMaterial::FLAG_UNSHADED, true);
@@ -232,6 +235,7 @@ void LRoomManager::CreateDebug()
 	ImmediateGeometry * b = memnew(ImmediateGeometry);
 	b->set_name("debug_lights");
 	add_child(b);
+	move_child(b, get_child_count()-1);
 	m_ID_DebugLights = b->get_instance_id();
 	b->set_material_override(m_mat_Debug_Bounds);
 	//b->hide();
@@ -785,10 +789,10 @@ void LRoomManager::rooms_set_camera(Node * pCam)
 }
 
 // convert empties and meshes to rooms and portals
-void LRoomManager::rooms_convert(bool bDeleteLights)
+void LRoomManager::rooms_convert(bool bPreparationRun, bool bDeleteLights)
 {
 	LRoomConverter conv;
-	conv.Convert(*this, bDeleteLights);
+	conv.Convert(*this, bPreparationRun, bDeleteLights);
 }
 
 bool LRoomManager::rooms_transfer_uv2s(Node * pMeshInstance_From, Node * pMeshInstance_To)
@@ -822,8 +826,14 @@ bool LRoomManager::rooms_unmerge_sobs(Node * pMergeMeshInstance)
 	return res;
 }
 
+bool LRoomManager::rooms_save_scene(Node * pNode, String szFilename)
+{
+	LSceneSaver saver;
+	return saver.SaveScene(pNode, szFilename);
+}
 
-MeshInstance * LRoomManager::rooms_create_lightmap_proxy()
+
+MeshInstance * LRoomManager::rooms_create_lightmap_proxy(String szSaveFilename)
 //bool LRoomManager::rooms_create_lightmap(Node * pBakedLightmap)
 {
 //	BakedLightmap * pBL = Object::cast_to<BakedLightmap>(pBakedLightmap);
@@ -836,6 +846,14 @@ MeshInstance * LRoomManager::rooms_create_lightmap_proxy()
 	LHelper helper;
 	Lawn::LDebug::m_bRunning = false;
 	MeshInstance * pMI = helper.CreateLightmapProxy(*this);
+
+	// if there is a save filename, save
+	if ((szSaveFilename != "") && pMI)
+	{
+		LSceneSaver saver;
+		saver.SaveScene(pMI, szSaveFilename);
+	}
+
 	Lawn::LDebug::m_bRunning = true;
 	return pMI;
 }
@@ -1327,6 +1345,7 @@ void LRoomManager::_bind_methods()
 	ClassDB::bind_method(D_METHOD("rooms_get_room"), &LRoomManager::rooms_get_room);
 
 	ClassDB::bind_method(D_METHOD("rooms_create_lightmap_proxy"), &LRoomManager::rooms_create_lightmap_proxy);
+	ClassDB::bind_method(D_METHOD("rooms_save_scene"), &LRoomManager::rooms_save_scene);
 
 	ClassDB::bind_method(D_METHOD("rooms_merge_sobs"), &LRoomManager::rooms_merge_sobs);
 	ClassDB::bind_method(D_METHOD("rooms_unmerge_sobs"), &LRoomManager::rooms_unmerge_sobs);

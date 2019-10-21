@@ -81,7 +81,7 @@ public:
 	};
 
 	// this function calls everything else in the converter
-	void Convert(LRoomManager &manager, bool bDeleteLights);
+	void Convert(LRoomManager &manager, bool bPreparationRun, bool bDeleteLights);
 
 private:
 	int CountRooms();
@@ -139,5 +139,8 @@ private:
 	bool Bound_AddPlaneIfUnique(LVector<Plane> &planes, const Plane &p);
 
 
+	// whether we are preparing the level, or doing a final run,
+	// in which case we should delete lights and set vis flags
+	bool m_bFinalRun;
 	bool m_bDeleteLights;
 };

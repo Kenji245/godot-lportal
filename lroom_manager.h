@@ -180,7 +180,7 @@ public:
 
 	// PUBLIC INTERFACE TO GDSCRIPT
 	// convert empties and meshes to rooms and portals
-	void rooms_convert(bool bDeleteLights);
+	void rooms_convert(bool bPreparationRun, bool bDeleteLights);
 
 	// free memory for current set of rooms, prepare for converting a new game level
 	void rooms_release();
@@ -200,9 +200,10 @@ public:
 
 	// one function to do all the uv mapping and lightmap creation in one
 	// (for godot lightmap workflow)
-	MeshInstance * rooms_create_lightmap_proxy();
+	MeshInstance * rooms_create_lightmap_proxy(String szSaveFilename);
 
-//	bool rooms_unmerge_sobs(const PoolVector<Vector2> &uvs);
+	// helper function for general use .. LPortal has the functionality, why not...
+	bool rooms_save_scene(Node * pNode, String szFilename);
 
 	// turn on and off culling for debugging
 	void rooms_set_active(bool bActive);
