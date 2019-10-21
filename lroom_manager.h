@@ -180,7 +180,7 @@ public:
 
 	// PUBLIC INTERFACE TO GDSCRIPT
 	// convert empties and meshes to rooms and portals
-	void rooms_convert(bool bPreparationRun, bool bDeleteLights);
+	void rooms_convert(bool bDeleteLights);
 
 	// free memory for current set of rooms, prepare for converting a new game level
 	void rooms_release();
@@ -193,14 +193,20 @@ public:
 	// (can be used to find the name etc of a room ID returned by dob_update)
 	Node * rooms_get_room(int room_id);
 
-	// helper function to merge SOB meshes for producing lightmaps
+	// helpers to enable the client to manage switching on and off physics and AI
+	int rooms_get_num_rooms() const;
+	bool rooms_is_room_visible(int room_id) const;
+	Array rooms_get_visible_rooms() const;
+
+
+	// helper function to merge SOB meshes for producing lightmaps VIA external blender workflow
 	bool rooms_merge_sobs(Node * pMergeMeshInstance);
 	bool rooms_unmerge_sobs(Node * pMergeMeshInstance);
 	bool rooms_transfer_uv2s(Node * pMeshInstance_From, Node * pMeshInstance_To);
 
 	// one function to do all the uv mapping and lightmap creation in one
 	// (for godot lightmap workflow)
-	MeshInstance * rooms_create_lightmap_proxy(String szSaveFilename);
+	MeshInstance * rooms_convert_lightmap_internal(String szProxyFilename, String szLevelFilename);
 
 	// helper function for general use .. LPortal has the functionality, why not...
 	bool rooms_save_scene(Node * pNode, String szFilename);

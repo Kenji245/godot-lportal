@@ -622,6 +622,35 @@ int LRoomManager::dob_get_room_id(Node * pDOB)
 	return Obj_GetRoomNum(pDOB);
 }
 
+// helpers to enable the client to manage switching on and off physics and AI
+int LRoomManager::rooms_get_num_rooms() const
+{
+	return m_Rooms.size();
+}
+
+bool LRoomManager::rooms_is_room_visible(int room_id) const
+{
+	if (room_id >= m_Rooms.size())
+	{
+		LWARN(5, "LRoomManager::rooms_is_room_visible : room id higher than number of rooms");
+		return false;
+	}
+
+	return m_BF_visible_rooms.GetBit(room_id) != 0;
+}
+
+Array LRoomManager::rooms_get_visible_rooms() const
+{
+	Array rooms;
+	for (int n=0; n<m_pCurr_VisibleRoomList->size(); n++)
+	{
+		rooms.push_back((*m_pCurr_VisibleRoomList)[n]);
+	}
+
+	return rooms;
+}
+
+
 Node * LRoomManager::rooms_get_room(int room_id)
 {
 	const LRoom * pRoom = GetRoom(room_id);
@@ -789,10 +818,10 @@ void LRoomManager::rooms_set_camera(Node * pCam)
 }
 
 // convert empties and meshes to rooms and portals
-void LRoomManager::rooms_convert(bool bPreparationRun, bool bDeleteLights)
+void LRoomManager::rooms_convert(bool bDeleteLights)
 {
 	LRoomConverter conv;
-	conv.Convert(*this, bPreparationRun, bDeleteLights);
+	conv.Convert(*this, false, bDeleteLights);
 }
 
 bool LRoomManager::rooms_transfer_uv2s(Node * pMeshInstance_From, Node * pMeshInstance_To)
@@ -833,28 +862,28 @@ bool LRoomManager::rooms_save_scene(Node * pNode, String szFilename)
 }
 
 
-MeshInstance * LRoomManager::rooms_create_lightmap_proxy(String szSaveFilename)
-//bool LRoomManager::rooms_create_lightmap(Node * pBakedLightmap)
+MeshInstance * LRoomManager::rooms_convert_lightmap_internal(String szProxyFilename, String szLevelFilename)
 {
-//	BakedLightmap * pBL = Object::cast_to<BakedLightmap>(pBakedLightmap);
-//	if (!pBL)
-//	{
-//		LWARN(5, "LRoomManager::rooms_create_lightmap : argument is not a baked lightmap");
-//		return false;
-//	}
+	LRoomConverter conv;
+	conv.Convert(*this, true, false);
 
 	LHelper helper;
 	Lawn::LDebug::m_bRunning = false;
 	MeshInstance * pMI = helper.CreateLightmapProxy(*this);
 
-	// if there is a save filename, save
-	if ((szSaveFilename != "") && pMI)
+	// if there is a save filename for the proxy, save
+	if ((szProxyFilename != "") && pMI)
 	{
 		LSceneSaver saver;
-		saver.SaveScene(pMI, szSaveFilename);
+		saver.SaveScene(pMI, szProxyFilename);
 	}
 
 	Lawn::LDebug::m_bRunning = true;
+
+	// save the UV2 mapped level
+	if (szLevelFilename != "")
+		rooms_save_scene(this, szLevelFilename);
+
 	return pMI;
 }
 
@@ -1342,14 +1371,12 @@ void LRoomManager::_bind_methods()
 	ClassDB::bind_method(D_METHOD("rooms_release"), &LRoomManager::rooms_release);
 
 	ClassDB::bind_method(D_METHOD("rooms_set_camera"), &LRoomManager::rooms_set_camera);
-	ClassDB::bind_method(D_METHOD("rooms_get_room"), &LRoomManager::rooms_get_room);
 
-	ClassDB::bind_method(D_METHOD("rooms_create_lightmap_proxy"), &LRoomManager::rooms_create_lightmap_proxy);
 	ClassDB::bind_method(D_METHOD("rooms_save_scene"), &LRoomManager::rooms_save_scene);
 
-	ClassDB::bind_method(D_METHOD("rooms_merge_sobs"), &LRoomManager::rooms_merge_sobs);
-	ClassDB::bind_method(D_METHOD("rooms_unmerge_sobs"), &LRoomManager::rooms_unmerge_sobs);
-	ClassDB::bind_method(D_METHOD("rooms_transfer_uv2s"), &LRoomManager::rooms_transfer_uv2s);
+//	ClassDB::bind_method(D_METHOD("rooms_merge_sobs"), &LRoomManager::rooms_merge_sobs);
+//	ClassDB::bind_method(D_METHOD("rooms_unmerge_sobs"), &LRoomManager::rooms_unmerge_sobs);
+//	ClassDB::bind_method(D_METHOD("rooms_transfer_uv2s"), &LRoomManager::rooms_transfer_uv2s);
 
 
 	// debugging
@@ -1360,6 +1387,8 @@ void LRoomManager::_bind_methods()
 	ClassDB::bind_method(D_METHOD("rooms_set_debug_bounds"), &LRoomManager::rooms_set_debug_bounds);
 	ClassDB::bind_method(D_METHOD("rooms_set_debug_lights"), &LRoomManager::rooms_set_debug_lights);
 
+	// lightmapping
+	ClassDB::bind_method(D_METHOD("rooms_convert_lightmap_internal"), &LRoomManager::rooms_convert_lightmap_internal);
 
 	// functions to add dynamic objects to the culling system
 	// Note that these should not be placed directly in rooms, the system will 'soft link' to them
@@ -1374,6 +1403,12 @@ void LRoomManager::_bind_methods()
 
 	ClassDB::bind_method(D_METHOD("dob_get_room_id"), &LRoomManager::dob_get_room_id);
 
+
 	ClassDB::bind_method(D_METHOD("light_register"), &LRoomManager::light_register);
 
+	// helper
+	ClassDB::bind_method(D_METHOD("rooms_get_room"), &LRoomManager::rooms_get_room);
+	ClassDB::bind_method(D_METHOD("rooms_get_num_rooms"), &LRoomManager::rooms_get_num_rooms);
+	ClassDB::bind_method(D_METHOD("rooms_is_room_visible"), &LRoomManager::rooms_is_room_visible);
+	ClassDB::bind_method(D_METHOD("rooms_get_visible_rooms"), &LRoomManager::rooms_get_visible_rooms);
 }

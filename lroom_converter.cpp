@@ -34,12 +34,13 @@
 
 void LRoomConverter::Convert(LRoomManager &manager, bool bPreparationRun, bool bDeleteLights)
 {
-	m_bFinalRun = bPreparationRun == false;
+	m_bFinalRun = (bPreparationRun == false);
+
 	m_bDeleteLights = bDeleteLights;
 
 	// This just is simply used to set how much debugging output .. more during conversion, less during running
 	// except when requested by explicitly clearing this flag.
-	Lawn::LDebug::m_bRunning = false;
+//	Lawn::LDebug::m_bRunning = false;
 
 	// test pool vector
 //	PoolVector<Vector2> arr;
@@ -55,7 +56,14 @@ void LRoomConverter::Convert(LRoomManager &manager, bool bPreparationRun, bool b
 //	}
 
 
-	LPRINT(5, "running convert");
+	if (!m_bFinalRun)
+	{
+		LPRINT(5, "running convert PREPARATION RUN");
+	}
+	else
+	{
+		LPRINT(5, "running convert");
+	}
 
 
 
@@ -209,7 +217,9 @@ void LRoomConverter::Convert_Room_FindObjects_Recursive(Node * pParent, LRoom &l
 
 			// take away layer 0 from the sob, so it can be culled effectively
 			if (m_bFinalRun)
+			{
 				pVI->set_layer_mask(0);
+			}
 		}
 		else
 		{
