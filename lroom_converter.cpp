@@ -29,10 +29,11 @@
 
 // save typing, I am lazy
 #define LMAN m_pManager
+#define LROOMLIST m_pRoomList
 
 
 
-void LRoomConverter::Convert(LRoomManager &manager, bool bPreparationRun, bool bDeleteLights)
+void LRoomConverter::Convert(LRoomManager &manager, bool bVerbose, bool bPreparationRun, bool bDeleteLights)
 {
 	m_bFinalRun = (bPreparationRun == false);
 
@@ -40,7 +41,7 @@ void LRoomConverter::Convert(LRoomManager &manager, bool bPreparationRun, bool b
 
 	// This just is simply used to set how much debugging output .. more during conversion, less during running
 	// except when requested by explicitly clearing this flag.
-	Lawn::LDebug::m_bRunning = false;
+	Lawn::LDebug::m_bRunning = (bVerbose == false);
 
 	// test pool vector
 //	PoolVector<Vector2> arr;
@@ -68,6 +69,7 @@ void LRoomConverter::Convert(LRoomManager &manager, bool bPreparationRun, bool b
 
 
 	LMAN = &manager;
+	LROOMLIST = manager.GetRoomList();
 
 	// force clear all arrays
 	manager.ReleaseResources(true);
@@ -125,9 +127,9 @@ void LRoomConverter::Convert_Rooms()
 	// first find all room empties and convert to LRooms
 	int count = 0;
 
-	for (int n=0; n<LMAN->get_child_count(); n++)
+	for (int n=0; n<LROOMLIST->get_child_count(); n++)
 	{
-		Node * pChild = LMAN->get_child(n);
+		Node * pChild = LROOMLIST->get_child(n);
 
 		if (!Node_IsRoom(pChild))
 			continue;
@@ -713,12 +715,12 @@ void LRoomConverter::Convert_Portals()
 
 int LRoomConverter::CountRooms()
 {
-	int nChildren = LMAN->get_child_count();
+	int nChildren = LROOMLIST->get_child_count();
 	int count = 0;
 
 	for (int n=0; n<nChildren; n++)
 	{
-		if (Node_IsRoom(LMAN->get_child(n)))
+		if (Node_IsRoom(LROOMLIST->get_child(n)))
 			count++;
 	}
 

@@ -31,10 +31,22 @@
 #include "lhelper.h"
 #include "lscene_saver.h"
 
+#define LROOMLIST m_pRoomList
+#define CHECK_ROOM_LIST if (!CheckRoomList())\
+{\
+WARN_PRINT_ONCE("rooms is unset");\
+return false;\
+}
+
+
 LRoomManager::LRoomManager()
 {
 	m_ID_camera = 0;
 	m_ID_DebugPlanes = 0;
+	m_ID_DebugBounds = 0;
+	m_ID_DebugLights = 0;
+	m_ID_RoomList = 0;
+
 	m_uiFrameCounter = 0;
 	m_iLoggingLevel = 2;
 	m_bActive = true;
@@ -49,6 +61,11 @@ LRoomManager::LRoomManager()
 	m_bDebugLights = false;
 
 	m_pRoomList = 0;
+
+	if (!Engine::get_singleton()->is_editor_hint())
+	{
+		CreateDebug();
+	}
 }
 
 int LRoomManager::FindClosestRoom(const Vector3 &pt) const
@@ -151,9 +168,17 @@ int LRoomManager::Obj_GetRoomNum(Node * pNode) const
 LRoom * LRoomManager::GetRoomFromDOB(Node * pNode)
 {
 	int iRoom = Obj_GetRoomNum(pNode);
-	if (iRoom == -1)
+	if (iRoom < 0)
 	{
-		WARN_PRINT_ONCE("LRoomManager::GetRoomFromDOB : metadata is empty");
+		if (iRoom == -1)
+		{
+			WARN_PRINT_ONCE("LRoomManager::GetRoomFromDOB : metadata is empty");
+		}
+
+		if (iRoom == -2)
+		{
+			WARN_PRINT_ONCE("LRoomManager::GetRoomFromDOB : are you updating an unregistered DOB?");
+		}
 		return 0;
 	}
 
@@ -169,7 +194,7 @@ LRoom * LRoomManager::GetRoomFromDOB(Node * pNode)
 // register but let LPortal know which room the dob should start in
 bool LRoomManager::dob_register_hint(Node * pDOB, float radius, Node * pRoom)
 {
-	CheckRoomList();
+	CHECK_ROOM_LIST
 
 	if (!pDOB)
 	{
@@ -307,7 +332,7 @@ bool LRoomManager::DobRegister(Spatial * pDOB, float radius, int iRoom)
 
 bool LRoomManager::dob_register(Node * pDOB, float radius)
 {
-	CheckRoomList();
+	CHECK_ROOM_LIST
 
 	if (!pDOB)
 	{
@@ -353,6 +378,11 @@ int LRoomManager::dob_update(Node * pDOB)
 
 		// get dob data to move to new room
 		unsigned int dob_id = pRoom->DOB_Find(pDOB);
+//		if (dob_id == -1)
+//		{
+//			WARN_PRINT_ONCE("DOB is not found in room");
+//			return -1;
+//		}
 		assert (dob_id != -1);
 
 		// copy across data before removing
@@ -378,7 +408,8 @@ int LRoomManager::dob_update(Node * pDOB)
 
 bool LRoomManager::dob_teleport_hint(Node * pDOB, Node * pRoom)
 {
-	CheckRoomList();
+	CHECK_ROOM_LIST
+
 	if (!pDOB)
 	{
 		WARN_PRINT_ONCE("dob_teleport_hint : pDOB is NULL");
@@ -452,7 +483,8 @@ bool LRoomManager::DobTeleport(Spatial * pDOB, int iNewRoomID)
 // not tested...
 bool LRoomManager::dob_teleport(Node * pDOB)
 {
-	CheckRoomList();
+	CHECK_ROOM_LIST
+
 	Spatial * pSpat = Object::cast_to<Spatial>(pDOB);
 	if (!pSpat)
 		return false;
@@ -472,9 +504,12 @@ bool LRoomManager::dob_teleport(Node * pDOB)
 
 bool LRoomManager::dob_unregister(Node * pDOB)
 {
-	CheckRoomList();
+	CHECK_ROOM_LIST
 
 	LRoom * pRoom = GetRoomFromDOB(pDOB);
+
+	// change the meta data on the DOB .. this will catch trying to update an unregistered DOB
+	Obj_SetRoomNum(pDOB, -2);
 
 	if (pRoom)
 	{
@@ -565,7 +600,8 @@ bool LRoomManager::LightCreate(Light * pLight, int roomID)
 
 bool LRoomManager::light_register(Node * pLightNode)
 {
-	CheckRoomList();
+	CHECK_ROOM_LIST
+
 	if (!pLightNode)
 	{
 		WARN_PRINT_ONCE("light_register : pLightNode is NULL");
@@ -723,7 +759,10 @@ void LRoomManager::ShowAll(bool bShow)
 void LRoomManager::rooms_set_active(bool bActive)
 {
 	if (bActive == m_bActive)
+	{
+		LWARN(2, "LRoomManager::rooms_set_active : noop, no state change");
 		return;
+	}
 
 	CheckRoomList();
 
@@ -747,12 +786,13 @@ void LRoomManager::rooms_set_active(bool bActive)
 	for (int n=0; n<m_SOBs.size(); n++)
 	{
 		LSob &sob = m_SOBs[n];
-		Spatial * pS = sob.GetSpatial();
-		if (pS)
-			if (!bActive)
-				pS->show();
-		else
-				pS->hide();
+		sob.Show(!bActive);
+//		Spatial * pS = sob.GetSpatial();
+//		if (pS)
+//			if (!bActive)
+//				pS->show();
+//		else
+//				pS->hide();
 
 		VisualInstance * pVI = sob.GetVI();
 		if (pVI)
@@ -782,9 +822,9 @@ void LRoomManager::rooms_log_frame()
 }
 
 
-void LRoomManager::rooms_set_camera(Node * pCam)
+bool LRoomManager::rooms_set_camera(Node * pCam)
 {
-	CheckRoomList();
+	CHECK_ROOM_LIST
 
 	// is it the first setting of the camera? if so hide all
 	if (m_ID_camera == 0)
@@ -793,13 +833,13 @@ void LRoomManager::rooms_set_camera(Node * pCam)
 	m_ID_camera = 0;
 
 	if (!pCam)
-		return;
+		return false;
 
 	Camera * pCamera = Object::cast_to<Camera>(pCam);
 	if (!pCamera)
 	{
 		WARN_PRINT("Not a camera");
-		return;
+		return false;
 	}
 
 	m_ID_camera = pCam->get_instance_id();
@@ -810,16 +850,21 @@ void LRoomManager::rooms_set_camera(Node * pCam)
 
 	// use this temporarily to force debug
 //	rooms_log_frame();
+
+	return true;
 }
 
 
 
 // convert empties and meshes to rooms and portals
-void LRoomManager::rooms_convert(bool bDeleteLights)
+bool LRoomManager::rooms_convert(bool bVerbose, bool bDeleteLights)
 {
-	CheckRoomList();
+	ResolveRoomListPath();
+	CHECK_ROOM_LIST
+
 	LRoomConverter conv;
-	conv.Convert(*this, false, bDeleteLights);
+	conv.Convert(*this, bVerbose, false, bDeleteLights);
+	return true;
 }
 
 bool LRoomManager::rooms_transfer_uv2s(Node * pMeshInstance_From, Node * pMeshInstance_To)
@@ -861,10 +906,15 @@ bool LRoomManager::rooms_save_scene(Node * pNode, String szFilename)
 
 MeshInstance * LRoomManager::rooms_convert_lightmap_internal(String szProxyFilename, String szLevelFilename)
 {
-	CheckRoomList();
+	ResolveRoomListPath();
+	if (!CheckRoomList())
+	{
+		WARN_PRINT_ONCE("rooms_convert_lightmap_internal : rooms not set");
+		return 0;
+	}
 
 	LRoomConverter conv;
-	conv.Convert(*this, true, false);
+	conv.Convert(*this, true, true, false);
 
 	LHelper helper;
 	Lawn::LDebug::m_bRunning = false;
@@ -881,7 +931,7 @@ MeshInstance * LRoomManager::rooms_convert_lightmap_internal(String szProxyFilen
 
 	// save the UV2 mapped level
 	if (szLevelFilename != "")
-		rooms_save_scene(this, szLevelFilename);
+		rooms_save_scene(LROOMLIST, szLevelFilename);
 
 	return pMI;
 }
@@ -903,7 +953,34 @@ bool LRoomManager::rooms_merge_sobs(Node * pMergeMeshInstance)
 void LRoomManager::rooms_release()
 {
 	CheckRoomList();
+
+	// unhide all the objects and reattach to scene graph
+	rooms_set_active(false);
+
+	// unregister all the dobs
+	for (int n=0; n<m_Rooms.size(); n++)
+	{
+		LRoom &lroom = m_Rooms[n];
+		lroom.Release(*this);
+	}
+
+
 	ReleaseResources(false);
+
+
+	m_ID_camera = 0;
+	m_ID_RoomList = 0;
+
+	m_uiFrameCounter = 0;
+//	m_iLoggingLevel = 2;
+	m_bActive = true;
+	m_bFrustumOnly = false;
+
+//	m_bDebugPlanes = false;
+//	m_bDebugBounds = false;
+//	m_bDebugLights = false;
+
+	m_pRoomList = 0;
 }
 
 void LRoomManager::ReleaseResources(bool bPrepareConvert)
@@ -972,25 +1049,25 @@ void LRoomManager::FrameUpdate_Prepare()
 	m_Pool.Reset();
 }
 
-void LRoomManager::FrameUpdate()
+bool LRoomManager::FrameUpdate()
 {
 	if (Engine::get_singleton()->is_editor_hint())
 	{
 		WARN_PRINT_ONCE("LRoomManager::FrameUpdate should not be called in editor");
-		return;
+		return false;
 	}
 
 	// could turn off internal processing? not that important
 	if (!m_bActive)
-		return;
+		return false;
 
-	CheckRoomList();
+	CHECK_ROOM_LIST
 
 	if (m_bFrustumOnly)
 	{
 		// debugging emulate view frustum
 		FrameUpdate_FrustumOnly();
-		return;
+		return true;
 	}
 
 	// we keep a frame counter to prevent visiting things multiple times on the same frame in recursive functions
@@ -1009,11 +1086,11 @@ void LRoomManager::FrameUpdate()
 	}
 	else
 		// camera not set .. do nothing
-		return;
+		return false;
 
 	// camera not a camera?? shouldn't happen but we'll check
 	if (!pCamera)
-		return;
+		return false;
 
 	// Which room is the camera currently in?
 	LRoom * pRoom = GetRoomFromDOB(pCamera);
@@ -1021,7 +1098,7 @@ void LRoomManager::FrameUpdate()
 	if (!pRoom)
 	{
 		WARN_PRINT_ONCE("LRoomManager::FrameUpdate : Camera is not in an LRoom");
-		return;
+		return false;
 	}
 
 	// lcamera contains the info needed for culling
@@ -1075,6 +1152,8 @@ void LRoomManager::FrameUpdate()
 
 	// when running, emit less debugging output so as not to choke the IDE
 	Lawn::LDebug::m_bRunning = true;
+
+	return true;
 }
 
 void LRoomManager::FrameUpdate_FinalizeRooms()
@@ -1344,7 +1423,7 @@ void LRoomManager::_notification(int p_what) {
 			if (!Engine::get_singleton()->is_editor_hint())
 			{
 				set_process_internal(true);
-				CreateDebug();
+				//CreateDebug();
 			}
 			else
 				set_process_internal(false);
@@ -1362,7 +1441,7 @@ void LRoomManager::_notification(int p_what) {
 void LRoomManager::_bind_methods()
 {
 	// main functions
-	ClassDB::bind_method(D_METHOD("rooms_convert", "delete lights"), &LRoomManager::rooms_convert);
+	ClassDB::bind_method(D_METHOD("rooms_convert", "verbose", "delete lights"), &LRoomManager::rooms_convert);
 	ClassDB::bind_method(D_METHOD("rooms_release"), &LRoomManager::rooms_release);
 
 	ClassDB::bind_method(D_METHOD("rooms_set_camera", "camera"), &LRoomManager::rooms_set_camera);

@@ -118,7 +118,7 @@ protected:
 	int m_iLoggingLevel;
 private:
 	// this is where we do all the culling
-	void FrameUpdate();
+	bool FrameUpdate();
 	void FrameUpdate_Prepare();
 	void FrameUpdate_FinalizeRooms();
 	void FrameUpdate_AddShadowCasters();
@@ -186,7 +186,7 @@ private:
 
 public:
 	// makes sure m_pRoomList is up to date and valid
-	void CheckRoomList() {GetRoomList_Checked();}
+	bool CheckRoomList() {return GetRoomList_Checked() != 0;}
 
 	Spatial * GetRoomList_Checked();
 	// unchecked, be sure to call checked version first which will set m_pRoomList
@@ -203,14 +203,14 @@ public:
 
 
 	// convert empties and meshes to rooms and portals
-	void rooms_convert(bool bDeleteLights);
+	bool rooms_convert(bool bVerbose, bool bDeleteLights);
 
 	// free memory for current set of rooms, prepare for converting a new game level
 	void rooms_release();
 
 	// choose which camera you want to use to determine visibility.
 	// normally this will be your main camera, but you can choose another for debugging
-	void rooms_set_camera(Node * pCam);
+	bool rooms_set_camera(Node * pCam);
 
 	// get the Godot room that is associated with an LPortal room
 	// (can be used to find the name etc of a room ID returned by dob_update)

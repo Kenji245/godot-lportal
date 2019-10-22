@@ -311,6 +311,23 @@ void LRoom::FinalizeVisibility(LRoomManager &manager)
 	}
 }
 
+// call when releasing a level, this should unregister all dobs within all rooms
+void LRoom::Release(LRoomManager &manager)
+{
+	for (int n=0; n<m_DOBs.size(); n++)
+	{
+		LDob &dob = m_DOBs[n];
+
+		Spatial * pS = dob.GetSpatial();
+		if (pS)
+		{
+			// signifies released or unregistered
+			manager.Obj_SetRoomNum(pS, -2);
+		}
+	}
+
+}
+
 // allows us to show / hide all dobs as the room visibility changes
 void LRoom::Room_MakeVisible(bool bVisible)
 {

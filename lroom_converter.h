@@ -81,7 +81,7 @@ public:
 	};
 
 	// this function calls everything else in the converter
-	void Convert(LRoomManager &manager, bool bPreparationRun, bool bDeleteLights);
+	void Convert(LRoomManager &manager, bool bVerbose, bool bPreparationRun, bool bDeleteLights);
 
 private:
 	int CountRooms();
@@ -133,7 +133,10 @@ private:
 
 
 
+	// set up on entry
 	LRoomManager * m_pManager;
+	Spatial * m_pRoomList; // room list pointed to by the manager nodepath
+
 	LVector<LTempRoom> m_TempRooms;
 
 	bool Bound_AddPlaneIfUnique(LVector<Plane> &planes, const Plane &p);
