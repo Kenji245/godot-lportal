@@ -47,6 +47,8 @@ LRoomManager::LRoomManager()
 	m_bDebugPlanes = false;
 	m_bDebugBounds = false;
 	m_bDebugLights = false;
+
+	m_pRoomList = 0;
 }
 
 int LRoomManager::FindClosestRoom(const Vector3 &pt) const
@@ -167,6 +169,8 @@ LRoom * LRoomManager::GetRoomFromDOB(Node * pNode)
 // register but let LPortal know which room the dob should start in
 bool LRoomManager::dob_register_hint(Node * pDOB, float radius, Node * pRoom)
 {
+	CheckRoomList();
+
 	if (!pDOB)
 	{
 		WARN_PRINT_ONCE("dob_register_hint : pDOB is NULL");
@@ -303,6 +307,8 @@ bool LRoomManager::DobRegister(Spatial * pDOB, float radius, int iRoom)
 
 bool LRoomManager::dob_register(Node * pDOB, float radius)
 {
+	CheckRoomList();
+
 	if (!pDOB)
 	{
 		WARN_PRINT_ONCE("dob_register : pDOB is NULL");
@@ -372,6 +378,7 @@ int LRoomManager::dob_update(Node * pDOB)
 
 bool LRoomManager::dob_teleport_hint(Node * pDOB, Node * pRoom)
 {
+	CheckRoomList();
 	if (!pDOB)
 	{
 		WARN_PRINT_ONCE("dob_teleport_hint : pDOB is NULL");
@@ -445,6 +452,7 @@ bool LRoomManager::DobTeleport(Spatial * pDOB, int iNewRoomID)
 // not tested...
 bool LRoomManager::dob_teleport(Node * pDOB)
 {
+	CheckRoomList();
 	Spatial * pSpat = Object::cast_to<Spatial>(pDOB);
 	if (!pSpat)
 		return false;
@@ -464,6 +472,8 @@ bool LRoomManager::dob_teleport(Node * pDOB)
 
 bool LRoomManager::dob_unregister(Node * pDOB)
 {
+	CheckRoomList();
+
 	LRoom * pRoom = GetRoomFromDOB(pDOB);
 
 	if (pRoom)
@@ -555,6 +565,7 @@ bool LRoomManager::LightCreate(Light * pLight, int roomID)
 
 bool LRoomManager::light_register(Node * pLightNode)
 {
+	CheckRoomList();
 	if (!pLightNode)
 	{
 		WARN_PRINT_ONCE("light_register : pLightNode is NULL");
@@ -571,26 +582,6 @@ bool LRoomManager::light_register(Node * pLightNode)
 	}
 
 	return LightCreate(pLight, -1);
-
-//	// set culling flag for light
-//	// 1 is for lighting objects outside the room system
-//	pLight->set_cull_mask(1 | LRoom::LAYER_MASK_LIGHT);
-
-//	// create new light
-//	LLight l;
-//	l.SetDefaults();
-//	l.m_GodotID = pLight->get_instance_id();
-
-//	// direction
-//	Transform tr = pLight->get_global_transform();
-//	l.m_ptPos = tr.origin;
-//	l.m_ptDir = -tr.basis.get_axis(2); // or possibly get_axis .. z is what we want
-//	l.m_RoomID = -1;
-//	l.m_eType = LLight::LT_DIRECTIONAL;
-
-//	m_Lights.push_back(l);
-
-//	return true;
 }
 
 
@@ -734,6 +725,8 @@ void LRoomManager::rooms_set_active(bool bActive)
 	if (bActive == m_bActive)
 		return;
 
+	CheckRoomList();
+
 	m_bActive = bActive;
 
 	if (m_bActive)
@@ -791,6 +784,8 @@ void LRoomManager::rooms_log_frame()
 
 void LRoomManager::rooms_set_camera(Node * pCam)
 {
+	CheckRoomList();
+
 	// is it the first setting of the camera? if so hide all
 	if (m_ID_camera == 0)
 		ShowAll(false);
@@ -817,15 +812,19 @@ void LRoomManager::rooms_set_camera(Node * pCam)
 //	rooms_log_frame();
 }
 
+
+
 // convert empties and meshes to rooms and portals
 void LRoomManager::rooms_convert(bool bDeleteLights)
 {
+	CheckRoomList();
 	LRoomConverter conv;
 	conv.Convert(*this, false, bDeleteLights);
 }
 
 bool LRoomManager::rooms_transfer_uv2s(Node * pMeshInstance_From, Node * pMeshInstance_To)
 {
+	CheckRoomList();
 	MeshInstance * pMI_from = Object::cast_to<MeshInstance>(pMeshInstance_From);
 	MeshInstance * pMI_to = Object::cast_to<MeshInstance>(pMeshInstance_To);
 
@@ -843,13 +842,11 @@ bool LRoomManager::rooms_transfer_uv2s(Node * pMeshInstance_From, Node * pMeshIn
 
 
 bool LRoomManager::rooms_unmerge_sobs(Node * pMergeMeshInstance)
-//bool LRoomManager::rooms_unmerge_sobs(const PoolVector<Vector2> &uvs)
 {
 	MeshInstance * pMI = Object::cast_to<MeshInstance>(pMergeMeshInstance);
 
 	LHelper helper;
 	Lawn::LDebug::m_bRunning = false;
-//	bool res = helper.UnMergeSOBs(*this, uvs);
 	bool res = helper.UnMergeSOBs(*this, pMI);
 	Lawn::LDebug::m_bRunning = true;
 	return res;
@@ -864,6 +861,8 @@ bool LRoomManager::rooms_save_scene(Node * pNode, String szFilename)
 
 MeshInstance * LRoomManager::rooms_convert_lightmap_internal(String szProxyFilename, String szLevelFilename)
 {
+	CheckRoomList();
+
 	LRoomConverter conv;
 	conv.Convert(*this, true, false);
 
@@ -903,6 +902,7 @@ bool LRoomManager::rooms_merge_sobs(Node * pMergeMeshInstance)
 // free memory for current set of rooms, prepare for converting a new game level
 void LRoomManager::rooms_release()
 {
+	CheckRoomList();
 	ReleaseResources(false);
 }
 
@@ -983,6 +983,8 @@ void LRoomManager::FrameUpdate()
 	// could turn off internal processing? not that important
 	if (!m_bActive)
 		return;
+
+	CheckRoomList();
 
 	if (m_bFrustumOnly)
 	{
@@ -1247,13 +1249,6 @@ void LRoomManager::FrameUpdate_FinalizeVisibility_WithinRooms()
 		// show / hide is relatively expensive because of propagating messages between nodes ...
 		// should be minimized
 		sob.Show(true);
-
-		// see how expensive show is
-//		for (int t=0; t<10000; t++)
-//		{
-//			sob.Show(false);
-//			sob.Show(true);
-//		}
 	}
 
 }
@@ -1367,48 +1362,176 @@ void LRoomManager::_notification(int p_what) {
 void LRoomManager::_bind_methods()
 {
 	// main functions
-	ClassDB::bind_method(D_METHOD("rooms_convert"), &LRoomManager::rooms_convert);
+	ClassDB::bind_method(D_METHOD("rooms_convert", "delete lights"), &LRoomManager::rooms_convert);
 	ClassDB::bind_method(D_METHOD("rooms_release"), &LRoomManager::rooms_release);
 
-	ClassDB::bind_method(D_METHOD("rooms_set_camera"), &LRoomManager::rooms_set_camera);
+	ClassDB::bind_method(D_METHOD("rooms_set_camera", "camera"), &LRoomManager::rooms_set_camera);
 
-	ClassDB::bind_method(D_METHOD("rooms_save_scene"), &LRoomManager::rooms_save_scene);
+	ClassDB::bind_method(D_METHOD("rooms_save_scene", "node", "filename"), &LRoomManager::rooms_save_scene);
 
+	// stuff for external workflow .. works but don't expose yet
 //	ClassDB::bind_method(D_METHOD("rooms_merge_sobs"), &LRoomManager::rooms_merge_sobs);
 //	ClassDB::bind_method(D_METHOD("rooms_unmerge_sobs"), &LRoomManager::rooms_unmerge_sobs);
 //	ClassDB::bind_method(D_METHOD("rooms_transfer_uv2s"), &LRoomManager::rooms_transfer_uv2s);
 
 
 	// debugging
-	ClassDB::bind_method(D_METHOD("rooms_set_logging"), &LRoomManager::rooms_set_logging);
+	ClassDB::bind_method(D_METHOD("rooms_set_logging", "level 0 to 6"), &LRoomManager::rooms_set_logging);
 	ClassDB::bind_method(D_METHOD("rooms_log_frame"), &LRoomManager::rooms_log_frame);
-	ClassDB::bind_method(D_METHOD("rooms_set_active"), &LRoomManager::rooms_set_active);
-	ClassDB::bind_method(D_METHOD("rooms_set_debug_planes"), &LRoomManager::rooms_set_debug_planes);
-	ClassDB::bind_method(D_METHOD("rooms_set_debug_bounds"), &LRoomManager::rooms_set_debug_bounds);
-	ClassDB::bind_method(D_METHOD("rooms_set_debug_lights"), &LRoomManager::rooms_set_debug_lights);
+	ClassDB::bind_method(D_METHOD("rooms_set_active", "active"), &LRoomManager::rooms_set_active);
+	ClassDB::bind_method(D_METHOD("rooms_set_debug_planes", "active"), &LRoomManager::rooms_set_debug_planes);
+	ClassDB::bind_method(D_METHOD("rooms_set_debug_bounds", "active"), &LRoomManager::rooms_set_debug_bounds);
+	ClassDB::bind_method(D_METHOD("rooms_set_debug_lights", "active"), &LRoomManager::rooms_set_debug_lights);
 
 	// lightmapping
-	ClassDB::bind_method(D_METHOD("rooms_convert_lightmap_internal"), &LRoomManager::rooms_convert_lightmap_internal);
+	ClassDB::bind_method(D_METHOD("rooms_convert_lightmap_internal", "proxy filename", "level filename"), &LRoomManager::rooms_convert_lightmap_internal);
 
 	// functions to add dynamic objects to the culling system
 	// Note that these should not be placed directly in rooms, the system will 'soft link' to them
 	// so they can be held, e.g. in pools elsewhere in the scene graph
-	ClassDB::bind_method(D_METHOD("dob_register"), &LRoomManager::dob_register);
-	ClassDB::bind_method(D_METHOD("dob_unregister"), &LRoomManager::dob_unregister);
-	ClassDB::bind_method(D_METHOD("dob_update"), &LRoomManager::dob_update);
-	ClassDB::bind_method(D_METHOD("dob_teleport"), &LRoomManager::dob_teleport);
+	ClassDB::bind_method(D_METHOD("dob_register", "dob", "radius"), &LRoomManager::dob_register);
+	ClassDB::bind_method(D_METHOD("dob_unregister", "dob"), &LRoomManager::dob_unregister);
+	ClassDB::bind_method(D_METHOD("dob_update", "dob"), &LRoomManager::dob_update);
+	ClassDB::bind_method(D_METHOD("dob_teleport", "dob"), &LRoomManager::dob_teleport);
 
-	ClassDB::bind_method(D_METHOD("dob_register_hint"), &LRoomManager::dob_register_hint);
-	ClassDB::bind_method(D_METHOD("dob_teleport_hint"), &LRoomManager::dob_teleport_hint);
+	ClassDB::bind_method(D_METHOD("dob_register_hint", "dob", "radius", "room"), &LRoomManager::dob_register_hint);
+	ClassDB::bind_method(D_METHOD("dob_teleport_hint", "dob", "room"), &LRoomManager::dob_teleport_hint);
 
-	ClassDB::bind_method(D_METHOD("dob_get_room_id"), &LRoomManager::dob_get_room_id);
+	ClassDB::bind_method(D_METHOD("dob_get_room_id", "dob"), &LRoomManager::dob_get_room_id);
 
 
-	ClassDB::bind_method(D_METHOD("light_register"), &LRoomManager::light_register);
+	ClassDB::bind_method(D_METHOD("light_register", "light"), &LRoomManager::light_register);
 
 	// helper
-	ClassDB::bind_method(D_METHOD("rooms_get_room"), &LRoomManager::rooms_get_room);
+	ClassDB::bind_method(D_METHOD("rooms_get_room", "room id"), &LRoomManager::rooms_get_room);
 	ClassDB::bind_method(D_METHOD("rooms_get_num_rooms"), &LRoomManager::rooms_get_num_rooms);
-	ClassDB::bind_method(D_METHOD("rooms_is_room_visible"), &LRoomManager::rooms_is_room_visible);
+	ClassDB::bind_method(D_METHOD("rooms_is_room_visible", "room id"), &LRoomManager::rooms_is_room_visible);
 	ClassDB::bind_method(D_METHOD("rooms_get_visible_rooms"), &LRoomManager::rooms_get_visible_rooms);
+
+
+	ClassDB::bind_method(D_METHOD("set_rooms", "rooms"), &LRoomManager::set_rooms);
+	ClassDB::bind_method(D_METHOD("set_rooms_path", "rooms"), &LRoomManager::set_rooms_path);
+	ClassDB::bind_method(D_METHOD("get_rooms_path"), &LRoomManager::get_rooms_path);
+
+	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "rooms"), "set_rooms_path", "get_rooms_path");
 }
+
+//////////////////////////////
+
+void LRoomManager::_set_rooms(Object *p_rooms)
+{
+		if (p_rooms)
+		{
+			LPRINT(2, "\t_set_rooms");
+		}
+		else
+		{
+			LPRINT(2, "\t_set_rooms NULL");
+		}
+
+		m_ID_RoomList = 0;
+		m_pRoomList = 0;
+
+		if (p_rooms)
+		{
+			// check is spatial
+			Spatial *pSpatial = Object::cast_to<Spatial>(p_rooms);
+
+			if (pSpatial)
+			{
+				m_ID_RoomList = pSpatial->get_instance_id();
+				m_pRoomList = pSpatial;
+				LPRINT(2, "\t\tRoomlist was Godot ID " + itos(m_ID_RoomList));
+			}
+			else
+			{
+				// should never get here?
+				WARN_PRINT("_set_rooms must be a Spatial");
+			}
+		}
+
+}
+
+
+void LRoomManager::set_rooms(const Object *p_rooms)
+{
+	// handle null
+	if (p_rooms == NULL)
+	{
+		WARN_PRINT("SCRIPT set_rooms NULL");
+		remove_rooms_path();
+		return;
+	}
+	LPRINT(2, "SCRIPT set_rooms");
+
+	// is it a spatial?
+	const Spatial * pSpatial = Object::cast_to<Spatial>(p_rooms);
+
+	if (!pSpatial)
+	{
+		WARN_PRINT("set_rooms must be a spatial.");
+		remove_rooms_path();
+		return;
+	}
+
+	NodePath path = get_path_to(pSpatial);
+	set_rooms_path(path);
+}
+
+
+void LRoomManager::set_rooms_path(const NodePath &p_path)
+{
+	LPRINT(2, "set_rooms_path " + p_path);
+	m_path_RoomList = p_path;
+	ResolveRoomListPath();
+}
+
+NodePath LRoomManager::get_rooms_path() const
+{
+	return m_path_RoomList;
+}
+
+void LRoomManager::remove_rooms_path()
+{
+	NodePath pathnull;
+	set_rooms_path(pathnull);
+}
+
+
+Spatial * LRoomManager::GetRoomList_Checked()
+{
+	if (m_ID_RoomList == 0)
+		return 0;
+
+	m_pRoomList = (Spatial *) ObjectDB::get_instance(m_ID_RoomList);
+
+	if (!m_pRoomList)
+		m_ID_RoomList = 0; // the node is no longer valid
+
+	return m_pRoomList;
+}
+
+
+void LRoomManager::ResolveRoomListPath()
+{
+	LPRINT(2, "ResolveRoomListPath " + m_path_RoomList);
+
+	if (has_node(m_path_RoomList))
+	{
+		LPRINT(2, "has_node");
+		Spatial * pNode = Object::cast_to<Spatial>(get_node(m_path_RoomList));
+		if (pNode)
+		{
+			_set_rooms(pNode);
+			return;
+		}
+		else
+		{
+			WARN_PRINT("RoomList must be a Spatial");
+		}
+	}
+
+	// default to setting to null
+	_set_rooms(NULL);
+}
+

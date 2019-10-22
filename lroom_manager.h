@@ -167,6 +167,11 @@ public:
 	LVector<Vector3> m_DebugPlanes;
 	LVector<Vector3> m_DebugPortalLightPlanes;
 
+	// we are now referencing the rooms indirectly via a nodepath rather than directly being children
+	// of the LRoomManager node
+	NodePath m_path_RoomList;
+	ObjectID m_ID_RoomList;
+
 private:
 	ObjectID m_ID_DebugPlanes;
 	ObjectID m_ID_DebugBounds;
@@ -174,11 +179,29 @@ private:
 	Ref<SpatialMaterial> m_mat_Debug_Planes;
 	Ref<SpatialMaterial> m_mat_Debug_Bounds;
 
+	// unchecked
+	Spatial * m_pRoomList;
 
+	void ResolveRoomListPath();
+
+public:
+	// makes sure m_pRoomList is up to date and valid
+	void CheckRoomList() {GetRoomList_Checked();}
+
+	Spatial * GetRoomList_Checked();
+	// unchecked, be sure to call checked version first which will set m_pRoomList
+	Spatial * GetRoomList() const {return m_pRoomList;}
 public:
 	LRoomManager();
 
 	// PUBLIC INTERFACE TO GDSCRIPT
+	void set_rooms(const Object *p_rooms);
+	void _set_rooms(Object *p_rooms);
+	void set_rooms_path(const NodePath &p_path);
+	NodePath get_rooms_path() const;
+	void remove_rooms_path();
+
+
 	// convert empties and meshes to rooms and portals
 	void rooms_convert(bool bDeleteLights);
 

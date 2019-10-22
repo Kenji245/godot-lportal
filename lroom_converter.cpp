@@ -40,7 +40,7 @@ void LRoomConverter::Convert(LRoomManager &manager, bool bPreparationRun, bool b
 
 	// This just is simply used to set how much debugging output .. more during conversion, less during running
 	// except when requested by explicitly clearing this flag.
-//	Lawn::LDebug::m_bRunning = false;
+	Lawn::LDebug::m_bRunning = false;
 
 	// test pool vector
 //	PoolVector<Vector2> arr;

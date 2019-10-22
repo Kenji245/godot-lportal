@@ -107,10 +107,6 @@ public:
 	// allows us to show / hide all dobs as the room visibility changes
 	void Room_MakeVisible(bool bVisible);
 
-	// hide godot room and all linked dobs
-	// USED AT RUNTIME
-//	void Hide_All();
-
 	// show godot room and all linked dobs and all sobs
 	void Debug_ShowAll(bool bActive);
 

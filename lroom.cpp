@@ -58,9 +58,6 @@ Spatial * LRoom::GetGodotRoom() const
 
 void LRoom::DOB_Add(const LDob &dob)
 {
-//	LDob dob;
-//	dob.m_ID = pDOB->get_instance_id();
-
 	m_DOBs.push_back(dob);
 }
 
@@ -621,7 +618,7 @@ void LRoom::DetermineVisibility_Recursive(LRoomManager &manager, int depth, cons
 				// copy the existing planes
 				//new_planes.copy_from(planes);
 
-				// new .. only copy the partial planes
+				// new .. only copy the partial planes that the portal cuts through
 				for (int n=0; n<partial_planes.size(); n++)
 					new_planes.push_back(planes[partial_planes[n]]);
 			}
