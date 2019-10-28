@@ -99,6 +99,8 @@ void LRoomConverter::Convert(LRoomManager &manager, bool bVerbose, bool bPrepara
 	LMAN->m_BF_master_SOBs.Create(num_sobs);
 	LMAN->m_BF_master_SOBs_prev.Create(num_sobs);
 
+	LMAN->m_LightRender.m_BF_Temp_SOBs.Create(num_sobs);
+
 	LMAN->m_BF_ActiveLights.Create(LMAN->m_Lights.size());
 	LMAN->m_BF_ActiveLights_prev.Create(LMAN->m_Lights.size());
 

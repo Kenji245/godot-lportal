@@ -82,6 +82,14 @@ public:
 		LT_SPOTLIGHT,
 		LT_OMNI,
 	};
+
+	enum eLightClass
+	{
+		LT_STATIC, // non moving light
+		LT_ROOM, // only moves within the room
+		LT_DYNAMIC, // can move between rooms (register as a DOB)
+	};
+
 	void SetDefaults();
 	Light * GetGodotLight();
 	bool IsGlobal() const {return m_RoomID == -1;}
@@ -90,6 +98,7 @@ public:
 	Vector3 m_ptPos;
 	ObjectID m_GodotID;
 	eLightType m_eType;
+	eLightClass m_eClass;
 	float m_fSpread; // for spotlight
 	float m_fMaxDist; // shadow distance not light distance
 

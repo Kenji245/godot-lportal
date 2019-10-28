@@ -11,3 +11,5 @@
 #include "lbitfield_dynamic.cpp"
 #include "lhelper.cpp"
 #include "lscene_saver.cpp"
+#include "ltrace.cpp"
+#include "lmain_camera.cpp"

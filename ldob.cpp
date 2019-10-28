@@ -66,6 +66,7 @@ void LLight::SetDefaults()
 {
 	m_GodotID = 0;
 	m_eType = LT_DIRECTIONAL;
+	m_eClass = LT_STATIC;
 	m_fSpread = 0.0f; // for spotlight
 	m_fMaxDist = 100.0f;
 	m_RoomID = -1;

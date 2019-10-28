@@ -24,7 +24,7 @@
 #include "ldebug.h"
 #include "lroom_manager.h"
 
-
+/////////////////////////////////////////////////////////////////////
 
 bool LPortal::NameStartsWith(Node * pNode, String szSearch)
 {

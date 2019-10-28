@@ -521,6 +521,100 @@ bool LRoomManager::dob_unregister(Node * pDOB)
 }
 
 
+void LRoomManager::Light_FrameProcess(int lightID)
+{
+	if (!m_BF_ActiveLights.GetBit(lightID))
+	{
+		m_BF_ActiveLights.SetBit(lightID, true);
+		m_ActiveLights.push_back(lightID);
+
+		Light_FindCasters(lightID);
+	}
+}
+
+// now we are centralizing the tracing out from static and dynamic lights for each frame to this function
+void LRoomManager::Light_FindCasters(int lightID)
+{
+	// add all shadow casters for this light (new method)
+	const LLight &light = m_Lights[lightID];
+/*
+	if (light.m_eClass == LLight::LT_STATIC)
+	{
+		int last_caster = light.m_FirstCaster + light.m_NumCasters;
+		for (int c=light.m_FirstCaster; c<last_caster; c++)
+		{
+			int sobID = m_LightCasters_SOB[c];
+
+			// only add to the caster list if not in it already (does this check need to happen, can this ever occur?)
+			if (!m_BF_caster_SOBs.GetBit(sobID))
+			{
+				LPRINT_RUN(2, "\t" + itos(sobID) + ", " + m_SOBs[sobID].GetSpatial()->get_name());
+				m_BF_caster_SOBs.SetBit(sobID, true);
+				m_CasterList_SOBs.push_back(sobID);
+			}
+			else
+			{
+				//LPRINT(2, "\t" + itos(sobID) + ", ALREADY CASTER " + manager.m_SOBs[sobID].GetSpatial()->get_name());
+			}
+
+		} // for c through caster
+	} // static lights have a list of SOB casters
+*/
+
+	// can only deal with lights in rooms for now
+	if (light.m_RoomID == -1)
+		return;
+
+	LRoom * pRoom = GetRoom(light.m_RoomID);
+	if (!pRoom)
+		return;
+
+	// we now need to trace either just DOBs (in the case of static lights)
+	// or SOBs and DOBs (in the case of dynamic lights)
+	m_LightRender.m_BF_Temp_SOBs.Blank();
+	m_LightRender.m_Temp_CasterList.clear();
+
+	LCamera cam;
+	cam.m_ptPos = light.m_ptPos;
+	cam.m_ptDir = light.m_ptDir;
+	m_Trace.Trace_Prepare(*this, cam, m_LightRender.m_BF_Temp_SOBs, m_BF_visible_rooms, m_LightRender.m_Temp_CasterList, *m_pCurr_VisibleRoomList);
+
+
+	unsigned int pool_member = m_Pool.Request();
+	assert (pool_member != -1);
+
+	LVector<Plane> &planes = m_Pool.Get(pool_member);
+	planes.clear();
+
+	// create subset planes of light frustum and camera frustum
+	m_MainCamera.AddCameraLightPlanes(cam, planes);
+
+	m_Trace.Trace_Recursive(0, *pRoom, planes);
+
+	// we no longer need these planes
+	m_Pool.Free(pool_member);
+
+	// process the sobs that were visible
+	for (int n=0; n<m_LightRender.m_Temp_CasterList.size(); n++)
+	{
+		int sobID = m_LightRender.m_Temp_CasterList[n];
+
+		// only add to the caster list if not in it already (does this check need to happen, can this ever occur?)
+		if (!m_BF_caster_SOBs.GetBit(sobID))
+		{
+			LPRINT_RUN(2, "\t" + itos(sobID) + ", " + m_SOBs[sobID].GetSpatial()->get_name());
+			m_BF_caster_SOBs.SetBit(sobID, true);
+			m_CasterList_SOBs.push_back(sobID);
+		}
+		else
+		{
+			//LPRINT(2, "\t" + itos(sobID) + ", ALREADY CASTER " + manager.m_SOBs[sobID].GetSpatial()->get_name());
+		}
+
+	}
+}
+
+
 // common stuff for global and local light creation
 bool LRoomManager::LightCreate(Light * pLight, int roomID)
 {
@@ -1101,11 +1195,20 @@ bool LRoomManager::FrameUpdate()
 		return false;
 	}
 
-	// lcamera contains the info needed for culling
+	// lcamera contains the info needed for running the recursive trace using the main camera
 	LCamera cam;
 	cam.m_ptPos = Vector3(0, 0, 0);
 	cam.m_ptDir = Vector3 (-1, 0, 0);
 
+	// get the camera desired and make into lcamera
+	assert (pCamera);
+	Transform tr = pCamera->get_global_transform();
+	cam.m_ptPos = tr.origin;
+	cam.m_ptDir = -tr.basis.get_axis(2); // or possibly get_axis .. z is what we want
+
+	// if we can't prepare the frustum is invalid
+	if (!m_MainCamera.Prepare(pCamera))
+		return false;
 
 	// the first set of planes are allocated and filled with the view frustum planes
 	// Note that the visual server doesn't actually need to do view frustum culling as a result...
@@ -1116,18 +1219,18 @@ bool LRoomManager::FrameUpdate()
 	LVector<Plane> &planes = m_Pool.Get(pool_member);
 	planes.clear();
 
-	// get the camera desired and make into lcamera
-	assert (pCamera);
-	Transform tr = pCamera->get_global_transform();
-	cam.m_ptPos = tr.origin;
-	cam.m_ptDir = -tr.basis.get_axis(2); // or possibly get_axis .. z is what we want
-
 	// luckily godot already has a function to return a list of the camera clipping planes
-	planes.copy_from(pCamera->get_frustum());
+	planes.copy_from(m_MainCamera.m_Planes);
 
 	// the whole visibility algorithm is recursive, spreading out from the camera room,
 	// rendering through any portals in view into other rooms, etc etc
-	pRoom->DetermineVisibility_Recursive(*this, 0, cam, planes);
+	m_Trace.Trace_Prepare(*this, cam, m_BF_visible_SOBs, m_BF_visible_rooms, m_VisibleList_SOBs, *m_pCurr_VisibleRoomList);
+	m_Trace.Trace_Recursive(0, *pRoom, planes);
+
+	// we no longer need these planes
+	m_Pool.Free(pool_member);
+
+//	pRoom->DetermineVisibility_Recursive(*this, 0, cam, planes);
 
 	// finally hide all the rooms that are currently visible but not in the visible bitfield as having been hit
 	FrameUpdate_FinalizeRooms();

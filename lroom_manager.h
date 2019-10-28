@@ -32,6 +32,8 @@
 
 #include "lroom.h"
 #include "lportal.h"
+#include "ltrace.h"
+#include "lmain_camera.h"
 
 
 
@@ -42,6 +44,7 @@ class LRoomManager : public Spatial {
 	friend class LRoom;
 	friend class LRoomConverter;
 	friend class LHelper;
+	friend class LTrace;
 
 
 	// godot ID of the camera (which should be registered as a DOB to allow moving between rooms)
@@ -100,11 +103,20 @@ private:
 	Lawn::LBitField_Dynamic m_BF_ActiveLights;
 	Lawn::LBitField_Dynamic m_BF_ActiveLights_prev;
 
+	// SHADOWS
 	// master list of shadow casters for each room
-	LVector<uint32_t> m_ShadowCasters_SOB;
+	LVector<uint32_t> m_ShadowCasters_SOB; // not used any more?
 
-	// master list of casters for each light
+	// master list of casters for each light (precalculated list)
 	LVector<uint32_t> m_LightCasters_SOB;
+
+	// keep all the light rendering stuff together
+	struct LLightRender
+	{
+		// each time we render from a light point of view, we reuse this list to store each caster ID
+		Lawn::LBitField_Dynamic m_BF_Temp_SOBs;
+		LVector<int> m_Temp_CasterList;
+	} m_LightRender;
 
 protected:
 	static void _bind_methods();
@@ -144,6 +156,10 @@ private:
 	void ReleaseResources(bool bPrepareConvert);
 	void ShowAll(bool bShow);
 
+	// now we are centralizing the tracing out from static and dynamic lights for each frame to this function
+	void Light_FrameProcess(int lightID);
+	void Light_FindCasters(int lightID);
+
 
 	// helper funcs
 	const LRoom * GetRoom(int i) const;
@@ -172,6 +188,8 @@ public:
 	NodePath m_path_RoomList;
 	ObjectID m_ID_RoomList;
 
+	LTrace m_Trace;
+
 private:
 	ObjectID m_ID_DebugPlanes;
 	ObjectID m_ID_DebugBounds;
@@ -181,6 +199,7 @@ private:
 
 	// unchecked
 	Spatial * m_pRoomList;
+	LMainCamera m_MainCamera;
 
 	void ResolveRoomListPath();
 
