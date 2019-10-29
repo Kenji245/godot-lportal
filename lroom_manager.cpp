@@ -45,6 +45,7 @@ LRoomManager::LRoomManager()
 	m_ID_DebugPlanes = 0;
 	m_ID_DebugBounds = 0;
 	m_ID_DebugLights = 0;
+	m_ID_DebugLightVolumes = 0;
 	m_ID_RoomList = 0;
 
 	m_uiFrameCounter = 0;
@@ -59,6 +60,7 @@ LRoomManager::LRoomManager()
 	m_bDebugPlanes = false;
 	m_bDebugBounds = false;
 	m_bDebugLights = false;
+	m_bDebugLightVolumes = true;
 
 	m_pRoomList = 0;
 
@@ -268,6 +270,27 @@ void LRoomManager::CreateDebug()
 	m_ID_DebugLights = b->get_instance_id();
 	b->set_material_override(m_mat_Debug_Bounds);
 	//b->hide();
+	}
+
+	{
+	ImmediateGeometry * p = memnew(ImmediateGeometry);
+	p->set_name("debug_lightvolumes");
+	add_child(p);
+	move_child(p, get_child_count()-1);
+
+	m_ID_DebugLightVolumes = p->get_instance_id();
+
+//	m_mat_Debug_Planes->set_as_toplevel(true);
+
+	m_mat_Debug_LightVolumes = Ref<SpatialMaterial>(memnew(SpatialMaterial));
+	m_mat_Debug_LightVolumes->set_flag(SpatialMaterial::FLAG_UNSHADED, true);
+//	m_mat_Debug_Planes->set_line_width(6.0);
+//	m_mat_Debug_Planes->set_feature(SpatialMaterial::FEATURE_TRANSPARENT, true);
+//	m_mat_Debug_Planes->set_flag(SpatialMaterial::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+//	m_mat_Debug_Planes->set_flag(SpatialMaterial::FLAG_SRGB_VERTEX_COLOR, true);
+	m_mat_Debug_LightVolumes->set_albedo(Color(0, 1, 1, 1));
+	p->set_material_override(m_mat_Debug_LightVolumes);
+	p->show();
 	}
 
 }
@@ -587,7 +610,7 @@ void LRoomManager::Light_FindCasters(int lightID)
 	planes.clear();
 
 	// create subset planes of light frustum and camera frustum
-	m_MainCamera.AddCameraLightPlanes(cam, planes);
+	m_MainCamera.AddCameraLightPlanes(*this, cam, planes);
 
 	m_Trace.Trace_Recursive(0, *pRoom, planes);
 
@@ -1112,6 +1135,11 @@ void LRoomManager::FrameUpdate_Prepare()
 {
 	if (m_bDebugPlanes)
 		m_DebugPlanes.clear();
+
+	if (m_bDebugLightVolumes)
+		m_DebugLightVolumes.clear();
+
+
 	// clear the visible room list to write to each frame
 	m_pCurr_VisibleRoomList->clear();
 
@@ -1207,7 +1235,7 @@ bool LRoomManager::FrameUpdate()
 	cam.m_ptDir = -tr.basis.get_axis(2); // or possibly get_axis .. z is what we want
 
 	// if we can't prepare the frustum is invalid
-	if (!m_MainCamera.Prepare(pCamera))
+	if (!m_MainCamera.Prepare(*this, pCamera))
 		return false;
 
 	// the first set of planes are allocated and filled with the view frustum planes
@@ -1483,6 +1511,27 @@ void LRoomManager::FrameUpdate_DrawDebug(const LCamera &cam, const LRoom &lroom)
 		}
 		im->end();
 	}
+
+	if (m_bDebugLightVolumes)
+	{
+		Object * pObj = ObjectDB::get_instance(m_ID_DebugLightVolumes);
+		ImmediateGeometry * im = Object::cast_to<ImmediateGeometry>(pObj);
+		if (!im)
+			return;
+
+		im->clear();
+
+		im->begin(Mesh::PRIMITIVE_LINES, NULL);
+
+		int nVerts = m_DebugLightVolumes.size();
+
+		for (int n=0; n<nVerts; n++)
+		{
+			im->add_vertex(m_DebugLightVolumes[n]);
+		}
+		im->end();
+	}
+
 
 	// if debug bounds are on and there is a bound for this room
 	const Geometry::MeshData &md = lroom.m_Bound_MeshData;

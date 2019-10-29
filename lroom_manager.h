@@ -178,10 +178,12 @@ public:
 	bool m_bDebugPlanes;
 	bool m_bDebugBounds;
 	bool m_bDebugLights;
+	bool m_bDebugLightVolumes;
 
 	// the planes are shown as a list of lines from the camera to the portal verts
 	LVector<Vector3> m_DebugPlanes;
 	LVector<Vector3> m_DebugPortalLightPlanes;
+	LVector<Vector3> m_DebugLightVolumes;
 
 	// we are now referencing the rooms indirectly via a nodepath rather than directly being children
 	// of the LRoomManager node
@@ -194,8 +196,10 @@ private:
 	ObjectID m_ID_DebugPlanes;
 	ObjectID m_ID_DebugBounds;
 	ObjectID m_ID_DebugLights;
+	ObjectID m_ID_DebugLightVolumes;
 	Ref<SpatialMaterial> m_mat_Debug_Planes;
 	Ref<SpatialMaterial> m_mat_Debug_Bounds;
+	Ref<SpatialMaterial> m_mat_Debug_LightVolumes;
 
 	// unchecked
 	Spatial * m_pRoomList;
