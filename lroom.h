@@ -39,14 +39,6 @@ class LPortal;
 class LRoomManager;
 class MeshInstance;
 
-class LCamera
-{
-public:
-	// all in world space, culling done in world space
-	Vector3 m_ptPos;
-	Vector3 m_ptDir;
-};
-
 
 
 class LRoom
@@ -100,7 +92,7 @@ public:
 	const String &get_name() const {return m_szName;}
 
 	// main function
-	void DetermineVisibility_Recursive(LRoomManager &manager, int depth, const LCamera &cam, const LVector<Plane> &planes, int first_portal_plane = 1);
+	void DetermineVisibility_Recursive(LRoomManager &manager, int depth, const LSource &cam, const LVector<Plane> &planes, int first_portal_plane = 1);
 	void FirstTouch(LRoomManager &manager);
 
 
@@ -128,6 +120,10 @@ public:
 
 	LRoom();
 	Spatial * GetGodotRoom() const;
+
+	// light casting .. changing the local light list
+	bool RemoveLocalLight(int light_id);
+	void AddLocalLight(int light_id) {m_LocalLights.push_back(light_id);}
 
 	// retained purely for debugging visualization
 	Geometry::MeshData m_Bound_MeshData;

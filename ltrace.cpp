@@ -10,10 +10,13 @@
 
 
 //void LTrace::Trace_Prepare(LRoomManager &manager, const LCamera &cam, Lawn::LBitField_Dynamic &BF_SOBs, Lawn::LBitField_Dynamic &BF_DOBs, Lawn::LBitField_Dynamic &BF_Rooms, LVector<int> &visible_SOBs, LVector<int> &visible_DOBs, LVector<int> &visible_Rooms)
-void LTrace::Trace_Prepare(LRoomManager &manager, const LCamera &cam, Lawn::LBitField_Dynamic &BF_SOBs, Lawn::LBitField_Dynamic &BF_Rooms, LVector<int> &visible_SOBs, LVector<int> &visible_Rooms)
+void LTrace::Trace_Prepare(LRoomManager &manager, const LSource &cam, Lawn::LBitField_Dynamic &BF_SOBs, Lawn::LBitField_Dynamic &BF_Rooms, LVector<int> &visible_SOBs, LVector<int> &visible_Rooms)
 {
 	m_pManager = &manager;
 	m_pCamera = &cam;
+
+	// default
+	m_TraceFlags = CULL_SOBS | CULL_DOBS | TOUCH_ROOMS;
 
 	m_pBF_SOBs = &BF_SOBs;
 //	m_pBF_DOBs = &BF_DOBs;
@@ -126,6 +129,32 @@ void LTrace::CullDOBs(LRoom &room, const LVector<Plane> &planes)
 }
 
 
+void LTrace::Trace_Begin(LRoom &room, LVector<Plane> &planes)
+{
+	int first_plane = 0;
+
+	switch (m_pCamera->m_eType)
+	{
+	case LSource::ST_SPOTLIGHT:
+		{
+			// special cases of spotlight, add some extra planes to define the cone
+			Plane p(m_pCamera->m_ptPos, -m_pCamera->m_ptDir);
+			planes.push_back(p);
+		}
+		break;
+	case LSource::ST_CAMERA:
+		first_plane = 1;
+		break;
+	}
+
+
+	LPRINT_RUN(2, "TRACE BEGIN");
+	LPRINT_RUN(2, m_pCamera->MakeDebugString());
+
+
+	Trace_Recursive(0, room, planes, first_plane);
+}
+
 void LTrace::Trace_Recursive(int depth, LRoom &room, const LVector<Plane> &planes, int first_portal_plane)
 {
 	// prevent too much depth
@@ -139,24 +168,22 @@ void LTrace::Trace_Recursive(int depth, LRoom &room, const LVector<Plane> &plane
 	// for debugging
 	Lawn::LDebug::m_iTabDepth = depth;
 	LPRINT_RUN(2, "");
-	LPRINT_RUN(2, "ROOM '" + room.get_name() + "' planes " + itos(planes.size()) + " portals " + itos(room.m_iNumPortals) );
+
+	LPRINT_RUN(2, "ROOM '" + itos(room.m_RoomID) + " : " + room.get_name() + "' planes " + itos(planes.size()) + " portals " + itos(room.m_iNumPortals) );
 
 	// only handle one touch per frame so far (one portal into room)
 	//assert (manager.m_uiFrameCounter > m_uiFrameTouched);
 
 	// first touch
-	if (room.m_uiFrameTouched < LMAN->m_uiFrameCounter)
-		FirstTouch(room);
+	DetectFirstTouch(room);
 
+	if (m_TraceFlags & CULL_SOBS)
+		CullSOBs(room, planes);
 
-	CullSOBs(room, planes);
-	CullDOBs(room, planes);
+	if (m_TraceFlags & CULL_DOBS)
+		CullDOBs(room, planes);
 
 	// portals
-
-
-
-
 
 	// look through portals
 	int nPortals = room.m_iNumPortals;
@@ -182,7 +209,7 @@ void LTrace::Trace_Recursive(int depth, LRoom &room, const LVector<Plane> &plane
 		LPRINT_RUN(2, "\tPORTAL " + itos (port_num) + " (" + itos(port_id) + ") " + port.get_name());
 		if (dist_cam > 0.0f)
 		{
-			LPRINT_RUN(2, "\t\tCULLED (wrong direction)");
+			LPRINT_RUN(2, "\t\tCULLED (back facing)");
 			continue;
 		}
 
@@ -300,6 +327,27 @@ void LTrace::Trace_Recursive(int depth, LRoom &room, const LVector<Plane> &plane
 
 }
 
+void LTrace::DetectFirstTouch(LRoom &room)
+{
+	// mark if not reached yet on this trace
+	if (!m_pBF_Rooms->GetBit(room.m_RoomID))
+	{
+		m_pBF_Rooms->SetBit(room.m_RoomID, true);
+
+		// keep track of which rooms are shown this trace
+		m_pVisible_Rooms->push_back(room.m_RoomID);
+
+		// camera and light traces
+		if (m_TraceFlags & TOUCH_ROOMS)
+		{
+			if (room.m_uiFrameTouched < LMAN->m_uiFrameCounter)
+				FirstTouch(room);
+		}
+	}
+
+}
+
+
 void LTrace::FirstTouch(LRoom &room)
 {
 	// set the frame counter
@@ -308,10 +356,10 @@ void LTrace::FirstTouch(LRoom &room)
 	// show this room and add to visible list of rooms
 	room.Room_MakeVisible(true);
 
-	m_pBF_Rooms->SetBit(room.m_RoomID, true);
+//	m_pBF_Rooms->SetBit(room.m_RoomID, true);
 
 	// keep track of which rooms are shown this frame
-	m_pVisible_Rooms->push_back(room.m_RoomID);
+//	m_pVisible_Rooms->push_back(room.m_RoomID);
 
 	// hide all dobs
 	for (int n=0; n<room.m_DOBs.size(); n++)

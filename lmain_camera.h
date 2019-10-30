@@ -42,7 +42,7 @@ public:
 	bool Prepare(LRoomManager &manager, Camera * pCam);
 
 	// main use of this object, we can create a clipping volume that is a mix of the light frustum and the camera volume
-	bool AddCameraLightPlanes(LRoomManager &manager, const LCamera &lcam, LVector<Plane> &planes) const;
+	bool AddCameraLightPlanes(LRoomManager &manager, const LSource &lcam, LVector<Plane> &planes) const;
 
 	LVector<Plane> m_Planes;
 	LVector<Vector3> m_Points;

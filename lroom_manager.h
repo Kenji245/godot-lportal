@@ -115,7 +115,9 @@ private:
 	{
 		// each time we render from a light point of view, we reuse this list to store each caster ID
 		Lawn::LBitField_Dynamic m_BF_Temp_SOBs;
-		LVector<int> m_Temp_CasterList;
+		Lawn::LBitField_Dynamic m_BF_Temp_Visible_Rooms;
+		LVector<int> m_Temp_Visible_SOBs;
+		LVector<int> m_Temp_Visible_Rooms;
 	} m_LightRender;
 
 protected:
@@ -142,7 +144,7 @@ private:
 	void FrameUpdate_FrustumOnly();
 
 	// draw planes and room hulls
-	void FrameUpdate_DrawDebug(const LCamera &cam, const LRoom &lroom);
+	void FrameUpdate_DrawDebug(const LSource &cam, const LRoom &lroom);
 
 
 	// internal
@@ -150,13 +152,16 @@ private:
 	bool DobRegister(Spatial * pDOB, float radius, int iRoom);
 	ObjectID DobRegister_FindVIRecursive(Node * pNode) const;
 	bool DobTeleport(Spatial * pDOB, int iNewRoomID);
-	bool LightCreate(Light * pLight, int roomID);
 	void CreateDebug();
 	void DobChangeVisibility(Spatial * pDOB, const LRoom * pOld, const LRoom * pNew);
 	void ReleaseResources(bool bPrepareConvert);
 	void ShowAll(bool bShow);
+	void DebugString_Set(String sz) {m_szDebugString = sz;}
+	void DebugString_Add(String sz) {m_szDebugString += sz;}
 
 	// now we are centralizing the tracing out from static and dynamic lights for each frame to this function
+	bool LightCreate(Light * pLight, int roomID);
+	void Light_UpdateTransform(LLight &light, const Light &glight) const;
 	void Light_FrameProcess(int lightID);
 	void Light_FindCasters(int lightID);
 
@@ -170,8 +175,12 @@ private:
 
 	// for DOBs, we need some way of storing the room ID on them, so we use metadata (currently)
 	// this is pretty gross but hey ho
-	int Obj_GetRoomNum(Node * pNode) const;
-	void Obj_SetRoomNum(Node * pNode, int num);
+	int Meta_GetRoomNum(Node * pNode) const;
+	void Meta_SetRoomNum(Node * pNode, int num);
+
+	// for lights we store the light ID in the metadata
+	void Meta_SetLightID(Node * pNode, int id);
+	int Meta_GetLightID(Node * pNode) const;
 
 public:
 	// whether debug planes is switched on
@@ -200,6 +209,7 @@ private:
 	Ref<SpatialMaterial> m_mat_Debug_Planes;
 	Ref<SpatialMaterial> m_mat_Debug_Bounds;
 	Ref<SpatialMaterial> m_mat_Debug_LightVolumes;
+	String m_szDebugString;
 
 	// unchecked
 	Spatial * m_pRoomList;
@@ -265,6 +275,7 @@ public:
 
 	// 0 to 6 .. defaults to 4 which is (2) in our priorities (i.e. 6 - level)
 	void rooms_set_logging(int level);
+	String rooms_get_debug_string();
 
 	// provide debugging output on the next frame
 	void rooms_log_frame();
@@ -294,6 +305,12 @@ public:
 	// LIGHTS
 	// global lights that will apply to all rooms
 	bool light_register(Node * pLightNode);
+
+	// dynamic lights
+	bool dynamic_light_register(Node * pLightNode, float radius);
+	bool dynamic_light_register_hint(Node * pLightNode, float radius, Node * pRoom);
+	bool dynamic_light_unregister(Node * pLightNode);
+	int dynamic_light_update(Node * pLightNode); // returns room within
 };
 
 #endif

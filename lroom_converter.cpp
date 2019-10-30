@@ -80,6 +80,7 @@ void LRoomConverter::Convert(LRoomManager &manager, bool bVerbose, bool bPrepara
 
 	// make sure bitfield is right size for number of rooms
 	LMAN->m_BF_visible_rooms.Create(count);
+	LMAN->m_LightRender.m_BF_Temp_Visible_Rooms.Create(count);
 
 	LMAN->m_Rooms.resize(count);
 
@@ -254,7 +255,7 @@ bool LRoomConverter::Convert_Room(Spatial * pNode, int lroomID)
 	// save the room ID on the godot room metadata
 	// This is used when registering DOBs and teleporting them with hints
 	// i.e. the Godot room is used to lookup the room ID of the startroom.
-	LMAN->Obj_SetRoomNum(pNode, lroomID);
+	LMAN->Meta_SetRoomNum(pNode, lroomID);
 
 	// create a new LRoom to exchange the children over to, and delete the original empty
 	lroom.m_szName = szRoom;
@@ -398,7 +399,7 @@ void LRoomConverter::Convert_Lights()
 	for (int n=0; n<LMAN->m_Lights.size(); n++)
 	{
 		LLight &l = LMAN->m_Lights[n];
-		if (l.IsGlobal())
+		if (l.m_Source.IsGlobal())
 			continue; // ignore globals .. affect all rooms
 
 		Light_Trace(n);
@@ -413,7 +414,7 @@ void LRoomConverter::Light_Trace(int iLightID)
 	// get the light
 	LLight &l = LMAN->m_Lights[iLightID];
 
-	LPRINT(5,"\nLight_Trace " + itos (iLightID) + " direction " + l.m_ptDir);
+	LPRINT(5,"\nLight_Trace " + itos (iLightID) + " direction " + l.m_Source.m_ptDir);
 
 	// reset the planes pool for each render out from the source room
 	LMAN->m_Pool.Reset();
@@ -428,7 +429,7 @@ void LRoomConverter::Light_Trace(int iLightID)
 
 	Lawn::LDebug::m_iTabDepth = 0;
 
-	Light_TraceRecursive(0, LMAN->m_Rooms[l.m_RoomID], l, iLightID, planes);
+	Light_TraceRecursive(0, LMAN->m_Rooms[l.m_Source.m_RoomID], l, iLightID, planes);
 }
 
 
@@ -460,6 +461,9 @@ void LRoomConverter::Light_TraceRecursive(int depth, LRoom &lroom, LLight &light
 	if (!bAlreadyInList)
 	{
 		lroom.m_LocalLights.push_back(iLightID);
+
+		// store the affected room on the light
+		light.AddAffectedRoom(lroom.m_RoomID);
 	}
 
 	// add each light caster that is within the planes to the light caster list
@@ -521,7 +525,7 @@ void LRoomConverter::Light_TraceRecursive(int depth, LRoom &lroom, LLight &light
 
 		LPRINT_RUN(2, "\tPORTAL " + itos (n) + " (" + itos(portalID) + ") " + port.get_name() + " normal " + port.m_Plane.normal);
 
-		float dot = port.m_Plane.normal.dot(light.m_ptDir);
+		float dot = port.m_Plane.normal.dot(light.m_Source.m_ptDir);
 
 		if (dot <= 0.0f)
 		{
@@ -610,12 +614,12 @@ void LRoomConverter::Convert_ShadowCasters()
 	{
 		const LLight &light = LMAN->m_Lights[l];
 		String sz = "Light " + itos (l);
-		if (light.IsGlobal())
+		if (light.m_Source.IsGlobal())
 			sz += " GLOBAL";
 		else
-			sz += " LOCAL from room " + itos(light.m_RoomID);
+			sz += " LOCAL from room " + itos(light.m_Source.m_RoomID);
 
-		LPRINT(5, sz + " direction " + light.m_ptDir);
+		LPRINT(5, sz + " direction " + light.m_Source.m_ptDir);
 
 		for (int n=0; n<LMAN->m_Rooms.size(); n++)
 		{
@@ -625,7 +629,7 @@ void LRoomConverter::Convert_ShadowCasters()
 			bool bAffectsRoom = true;
 
 			// if the light is local, does it affect this room?
-			if (!light.IsGlobal())
+			if (!light.m_Source.IsGlobal())
 			{
 				// a local light .. does it affect this room?
 				bAffectsRoom = false;
@@ -909,14 +913,14 @@ void LRoomConverter::LRoom_FindShadowCasters_Recursive(LRoom &source_lroom, int 
 
 		// cull with light direction
 		float dot;
-		if (light.m_eType == LLight::LT_DIRECTIONAL)
+		if (light.m_Source.m_eType == LSource::ST_DIRECTIONAL)
 		{
-			dot = port.m_Plane.normal.dot(light.m_ptDir);
+			dot = port.m_Plane.normal.dot(light.m_Source.m_ptDir);
 		}
 		else
 		{
 			// cull with light direction to portal
-			Vector3 ptLightToPort = port.m_ptCentre - light.m_ptPos;
+			Vector3 ptLightToPort = port.m_ptCentre - light.m_Source.m_ptPos;
 			dot = port.m_Plane.normal.dot(ptLightToPort);
 		}
 

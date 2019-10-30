@@ -62,17 +62,72 @@ void LHidable::Show(bool bShow)
 
 /////////////////////////////////////////////////////////////////////
 
-void LLight::SetDefaults()
+const char * LSource::m_szTypes[] = {"CAM", "DIR", "SPOT", "OMNI", };
+const char * LSource::m_szClasses[] = {"STATIC", "ROOM", "DYN", };
+
+void LSource::Source_SetDefaults()
 {
-	m_GodotID = 0;
-	m_eType = LT_DIRECTIONAL;
-	m_eClass = LT_STATIC;
-	m_fSpread = 0.0f; // for spotlight
+	m_eType = ST_CAMERA;
+	m_eClass = SC_STATIC;
+	m_fSpread = 0.0f;
 	m_fMaxDist = 100.0f;
 	m_RoomID = -1;
+}
+
+String LSource::MakeDebugString() const
+{
+	String sz = "SOURCE : ";
+	sz += String(m_szTypes[m_eType]) + " - ";
+	sz += String(m_szClasses[m_eClass]) + "\tpos ";
+
+	sz += String(Variant(m_ptPos)) + "\tdir ";
+	sz += String(Variant(m_ptDir)) + "\n";
+
+	return sz;
+}
+
+
+///////////////////////////////////////////////////
+
+
+void LLight::Light_SetDefaults()
+{
+	m_Source.Source_SetDefaults();
+
+	m_GodotID = 0;
+//	m_eType = LT_DIRECTIONAL;
+//	m_eClass = LT_STATIC;
+//	m_fSpread = 0.0f; // for spotlight
+//	m_fMaxDist = 100.0f;
+//	m_RoomID = -1;
 
 	m_FirstCaster = 0;
 	m_NumCasters = 0;
+
+	m_NumAffectedRooms = 0;
+}
+
+bool LLight::AddAffectedRoom(int room_id)
+{
+	if (m_NumAffectedRooms >= MAX_AFFECTED_ROOMS)
+		return false;
+	m_AffectedRooms[m_NumAffectedRooms++] = room_id;
+	return true;
+}
+
+
+
+// dynamic light update
+void LLight::Update()
+{
+	// firstly, has it crossed into another room like the dobs
+}
+
+String LLight::MakeDebugString() const
+{
+	String sz;
+	sz += m_Source.MakeDebugString();
+	return sz;
 }
 
 

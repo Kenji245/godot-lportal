@@ -525,7 +525,7 @@ String LMainCamera::String_PlaneBF(unsigned int BF)
 }
 
 
-bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LCamera &lcam, LVector<Plane> &planes) const
+bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LSource &lcam, LVector<Plane> &planes) const
 {
 	// doesn't account for directional lights yet! only points
 

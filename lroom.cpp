@@ -192,6 +192,17 @@ void LRoom::SoftShow(VisualInstance * pVI, uint32_t show_flags)
 }
 
 
+bool LRoom::RemoveLocalLight(int light_id)
+{
+	int found = m_LocalLights.find(light_id);
+	if (found == -1)
+		return false;
+
+	m_LocalLights.remove_unsorted(found);
+	return true;
+}
+
+
 // naive version, adds all the non visible objects in visible rooms as shadow casters
 void LRoom::AddShadowCasters(LRoomManager &manager)
 {
@@ -297,7 +308,7 @@ void LRoom::Release(LRoomManager &manager)
 		if (pS)
 		{
 			// signifies released or unregistered
-			manager.Obj_SetRoomNum(pS, -2);
+			manager.Meta_SetRoomNum(pS, -2);
 		}
 	}
 
@@ -407,7 +418,7 @@ void LRoom::FirstTouch(LRoomManager &manager)
 }
 
 
-void LRoom::DetermineVisibility_Recursive(LRoomManager &manager, int depth, const LCamera &cam, const LVector<Plane> &planes, int first_portal_plane)
+void LRoom::DetermineVisibility_Recursive(LRoomManager &manager, int depth, const LSource &cam, const LVector<Plane> &planes, int first_portal_plane)
 {
 	// prevent too much depth
 	if (depth > 8)
