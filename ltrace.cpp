@@ -171,7 +171,22 @@ void LTrace::Trace_Recursive(int depth, LRoom &room, const LVector<Plane> &plane
 		// get the room pointed to by the portal
 		LRoom * pLinkedRoom = &LMAN->Portal_GetLinkedRoom(port);
 
+
+
 		// cull by portal angle to camera.
+
+		// NEW! I've come up with a much better way of culling portals by direction to camera...
+		// instead of using dot product with a varying view direction, we simply find which side of the portal
+		// plane the camera is on! If it is behind, the portal can be seen through, if in front, it can't! :)
+		float dist_cam = port.m_Plane.distance_to(m_pCamera->m_ptPos);
+		LPRINT_RUN(2, "\tPORTAL " + itos (port_num) + " (" + itos(port_id) + ") " + port.get_name());
+		if (dist_cam > 0.0f)
+		{
+			LPRINT_RUN(2, "\t\tCULLED (wrong direction)");
+			continue;
+		}
+
+		/*
 		// Note we need to deal with 'side on' portals, and the camera has a spreading view, so we cannot simply dot
 		// the portal normal with camera direction, we need to take into account angle to the portal itself.
 		const Vector3 &portal_normal = port.m_Plane.normal;
@@ -190,6 +205,7 @@ void LTrace::Trace_Recursive(int depth, LRoom &room, const LVector<Plane> &plane
 			LPRINT_RUN(2, "\t\tCULLED (wrong direction)");
 			continue;
 		}
+		*/
 
 		// is it culled by the planes?
 		LPortal::eClipResult overall_res = LPortal::eClipResult::CLIP_INSIDE;

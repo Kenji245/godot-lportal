@@ -1,5 +1,7 @@
 #pragma once
 
+//#define LMAINCAMERA_CALC_LUT
+
 // we get the main camera clipping planes and derive the points from 3 plane equations
 // in order to cull shadow casters to the camera frustum
 class LMainCamera
@@ -46,17 +48,26 @@ public:
 	LVector<Vector3> m_Points;
 
 private:
+	String String_PlaneBF(unsigned int BF);
+
+#ifdef LMAINCAMERA_CALC_LUT
 	void GetNeighbours(ePlane p, ePlane neigh_planes[4]) const;
 	void GetCornersOfPlanes( ePlane _fpPlane0, ePlane _fpPlane1, ePoint _fpRet[2] ) const;
-	void AddLUT(int p0, int p1, ePoint pts[2]);
-	void AddLUT_Entry(unsigned int n, ePoint pts[2]);
+	void CreateLUT();
 	void CompactLUT_Entry(int n);
 	void DebugPrintLUT();
+	void DebugPrintLUT_AsTable();
+	void AddLUT(int p0, int p1, ePoint pts[2]);
+	void AddLUT_Entry(unsigned int n, ePoint pts[2]);
 	String DebugStringLUT_Entry(const LVector<uint8_t> &entry);
-	String String_PlaneBF(unsigned int BF);
 	String String_LUTEntry(const LVector<uint8_t> &entry);
 
 	// contains a list of points for each combination of plane facing directions
 	LVector<uint8_t> m_LUT[LUT_SIZE];
+#endif
+
+	// precalculated LUT
+	static uint8_t m_LUT_EntrySizes[64];
+	static uint8_t m_LUT_Entries[64][8];
 };
 

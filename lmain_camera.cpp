@@ -13,6 +13,284 @@ const char * LMainCamera::m_szPoints[] = {"FAR_LEFT_TOP", "FAR_LEFT_BOTTOM", "FA
 "NEAR_LEFT_TOP", "NEAR_LEFT_BOTTOM", "NEAR_RIGHT_TOP", "NEAR_RIGHT_BOTTOM",};
 
 
+uint8_t LMainCamera::m_LUT_EntrySizes[64] = {0, 4, 4, 0, 4, 6, 6, 8, 4, 6, 6, 8, 6, 6, 6, 6, 4, 6, 6, 8, 0, 8, 8, 0, 6, 6, 6, 6, 8, 6, 6, 4, 4, 6, 6, 8, 6, 6, 6, 6, 0, 8, 8, 0, 8, 6, 6, 4, 6, 6, 6, 6, 8, 6, 6, 4, 8, 6, 6, 4, 0, 4, 4, 0, };
+
+
+#ifdef LMAINCAMERA_CALC_LUT
+
+
+void LMainCamera::CreateLUT()
+{
+	// each pair of planes that are opposite can have an edge
+	for (int p0 = 0; p0<P_TOTAL; p0++)
+	{
+		// for each neighbour of the plane
+		ePlane neighs[4];
+		GetNeighbours((ePlane) p0, neighs);
+
+		for (int n=0; n<4; n++)
+		{
+			int p1 = neighs[n];
+
+			//if these are opposite we need to add the 2 points they share
+			ePoint pts[2];
+			GetCornersOfPlanes( (ePlane) p0, (ePlane) p1, pts );
+
+			AddLUT(p0, p1, pts);
+		}
+	}
+
+	for (int n=0; n<LUT_SIZE; n++)
+	{
+		CompactLUT_Entry(n);
+	}
+
+	DebugPrintLUT();
+	DebugPrintLUT_AsTable();
+
+}
+
+
+// we can pre-create the entire LUT and store it hard coded as a static inside the executable!
+// it is only small in size, 64 entries with max 8 bytes per entry
+void LMainCamera::DebugPrintLUT_AsTable()
+{
+	print_line("\nLIGHT VOLUME TABLE BEGIN\n");
+
+	String sz = "{";
+	for (int n=0; n<LUT_SIZE; n++)
+	{
+		const LVector<uint8_t> &entry = m_LUT[n];
+
+		sz += itos (entry.size()) + ", ";
+	}
+	sz += "}";
+	print_line(sz);
+
+	for (int n=0; n<LUT_SIZE; n++)
+	{
+		const LVector<uint8_t> &entry = m_LUT[n];
+
+		String sz = "{";
+
+		// first is the number of points in the entry
+		int s = entry.size();
+		//assert (s <= 7);
+
+//		sz += itos(s) + ", ";
+
+		// in the very special (and rare case of 8 points, we can infer the 8th point at runtime)
+		for (int p=0; p<7; p++)
+		{
+			if (p < s)
+				sz += itos(entry[p]);
+			else
+				sz += "0"; // just a spacer
+
+			sz += ", ";
+		}
+
+		sz += "},";
+		print_line(sz);
+	}
+
+	print_line("\nLIGHT VOLUME TABLE END\n");
+}
+
+
+void LMainCamera::DebugPrintLUT()
+{
+	for (int n=0; n<LUT_SIZE; n++)
+	{
+		String sz;
+		sz = "LUT" + itos(n) + ":\t";
+
+		sz += String_PlaneBF(n);
+		print_line(sz);
+
+		const LVector<uint8_t> &entry = m_LUT[n];
+
+		//sz += DebugStringLUT_Entry(entry);
+		sz = "\t" + String_LUTEntry(entry);
+
+//		for (int i=0; i<entry.size(); i++)
+//		{
+//			int ePt = entry[i];
+//			sz += itos(ePt) + ", ";
+//		}
+
+		//LPRINT(2, sz);
+		print_line(sz);
+	}
+}
+
+
+String LMainCamera::String_LUTEntry(const LVector<uint8_t> &entry)
+{
+	String sz;
+
+	for (int n=0; n<entry.size(); n++)
+	{
+		sz += m_szPoints[entry[n]];
+		sz += ", ";
+	}
+
+	return sz;
+}
+
+
+String LMainCamera::DebugStringLUT_Entry(const LVector<uint8_t> &entry)
+{
+	String sz;
+//	sz = "LUT" + itos(n) + ":\t";
+
+//	const LVector<uint8_t> &entry = m_LUT[n];
+
+	for (int i=0; i<entry.size(); i++)
+	{
+		int ePt = entry[i];
+		sz += itos(ePt) + ", ";
+	}
+
+	//LPRINT(2, sz);
+//	print_line(sz);
+	return sz;
+}
+
+
+
+void LMainCamera::AddLUT(int p0, int p1, ePoint pts[2])
+{
+	unsigned int bit0 = 1 << p0;
+	unsigned int bit1 = 1 << p1;
+
+	// all entries of the LUT that have plane 0 set and plane 1 not set
+	for (unsigned int n=0; n<64; n++)
+	{
+		// if bit0 not set
+		if (!(n & bit0))
+			continue;
+
+		// if bit1 set
+		if (n & bit1)
+			continue;
+
+		// meets criteria
+		AddLUT_Entry(n, pts);
+	}
+}
+
+void LMainCamera::AddLUT_Entry(unsigned int n, ePoint pts[2])
+{
+	assert (n < LUT_SIZE);
+	LVector<uint8_t> &entry = m_LUT[n];
+
+	const ePoint &a = pts[0];
+	const ePoint &b = pts[1];
+
+	entry.push_back(pts[0]);
+	entry.push_back(pts[1]);
+}
+
+void LMainCamera::CompactLUT_Entry(int n)
+{
+	assert (n < LUT_SIZE);
+	LVector<uint8_t> &entry = m_LUT[n];
+
+	int nPairs = entry.size() / 2;
+
+	if (nPairs == 0)
+		return;
+
+	LVector<uint8_t> temp;
+	temp.reserve(16); // 8 max?
+
+	String sz;
+	sz = "Compact LUT" + itos(n) + ":\t";
+	sz += DebugStringLUT_Entry(entry);
+	print_line(sz);
+
+	// add first pair
+	temp.push_back(entry[0]);
+	temp.push_back(entry[1]);
+	unsigned int BFpairs = 1;
+
+	sz = DebugStringLUT_Entry(temp) + " -> ";
+	print_line(sz);
+
+	// attempt to add a pair each time
+	for (int done=1; done<nPairs; done++)
+	{
+		sz = "done " + itos(done) + ": ";
+		// find a free pair
+		for (int p=1; p<nPairs; p++)
+		{
+			unsigned int bit = 1 << p;
+			// is it done already?
+			if (BFpairs & bit)
+				continue;
+
+			// there must be at least 1 free pair
+			// attempt to add
+			int a = entry[p * 2];
+			int b = entry[(p * 2)+1];
+
+			sz += "[" + itos(a) + "-" + itos(b) + "], ";
+
+			int foundA = temp.find(a);
+			int foundB = temp.find(b);
+
+			// special case, if they are both already in the list, no need to add
+			// as this is a link from the tail to the head of the list
+			if ((foundA != -1) && (foundB != -1))
+			{
+				sz += "foundAB link " + itos(foundA) + ", " + itos(foundB) + " ";
+				BFpairs |= bit;
+				goto found;
+			}
+
+			// find a
+			if (foundA != -1)
+			{
+				sz += "foundA " + itos(foundA) + " ";
+				temp.insert(foundA+1, b);
+				BFpairs |= bit;
+				goto found;
+			}
+
+			// find b
+			if (foundB != -1)
+			{
+				sz += "foundB " + itos(foundB) + " ";
+				temp.insert(foundB, a);
+				BFpairs |= bit;
+				goto found;
+			}
+
+		} // check each pair for adding
+
+		// if we got here before finding a link, the whole set of planes is INVALID
+		// e.g. far and near plane only, does not create continuous sillouhette of edges
+		print_line("\tINVALID");
+		entry.clear();
+		return;
+
+		found:;
+		print_line(sz);
+		sz = "\ttemp now : " + DebugStringLUT_Entry(temp);
+		print_line(sz);
+
+	}
+
+	// temp should now be the sorted entry .. delete the old one and replace by temp
+	entry.clear();
+	entry.copy_from(temp);
+}
+
+
+
+
+
 void LMainCamera::GetNeighbours(ePlane p, ePlane neigh_planes[4]) const
 {
 	// table of neighbouring planes to each
@@ -219,63 +497,16 @@ ePoint _fpRet[2] ) const
 	_fpRet[1] = fpTable[_fpPlane0][_fpPlane1][1];
 }
 
+#endif
+
+
 LMainCamera::LMainCamera()
 {
-	// create the LUT
-
-
-	// each pair of planes that are opposite can have an edge
-	for (int p0 = 0; p0<P_TOTAL; p0++)
-	{
-		// for each neighbour of the plane
-		ePlane neighs[4];
-		GetNeighbours((ePlane) p0, neighs);
-
-		for (int n=0; n<4; n++)
-		{
-			int p1 = neighs[n];
-
-			//if these are opposite we need to add the 2 points they share
-			ePoint pts[2];
-			GetCornersOfPlanes( (ePlane) p0, (ePlane) p1, pts );
-
-			AddLUT(p0, p1, pts);
-		}
-	}
-
-	for (int n=0; n<LUT_SIZE; n++)
-	{
-		CompactLUT_Entry(n);
-	}
-
-	DebugPrintLUT();
+#ifdef LMAINCAMERA_CALC_LUT
+	CreateLUT();
+#endif
 }
 
-void LMainCamera::DebugPrintLUT()
-{
-	for (int n=0; n<LUT_SIZE; n++)
-	{
-		String sz;
-		sz = "LUT" + itos(n) + ":\t";
-
-		sz += String_PlaneBF(n);
-		print_line(sz);
-
-		const LVector<uint8_t> &entry = m_LUT[n];
-
-		//sz += DebugStringLUT_Entry(entry);
-		sz = "\t" + String_LUTEntry(entry);
-
-//		for (int i=0; i<entry.size(); i++)
-//		{
-//			int ePt = entry[i];
-//			sz += itos(ePt) + ", ";
-//		}
-
-		//LPRINT(2, sz);
-		print_line(sz);
-	}
-}
 
 String LMainCamera::String_PlaneBF(unsigned int BF)
 {
@@ -291,168 +522,6 @@ String LMainCamera::String_PlaneBF(unsigned int BF)
 	}
 
 	return sz;
-}
-
-String LMainCamera::String_LUTEntry(const LVector<uint8_t> &entry)
-{
-	String sz;
-
-	for (int n=0; n<entry.size(); n++)
-	{
-		sz += m_szPoints[entry[n]];
-		sz += ", ";
-	}
-
-	return sz;
-}
-
-
-String LMainCamera::DebugStringLUT_Entry(const LVector<uint8_t> &entry)
-{
-	String sz;
-//	sz = "LUT" + itos(n) + ":\t";
-
-//	const LVector<uint8_t> &entry = m_LUT[n];
-
-	for (int i=0; i<entry.size(); i++)
-	{
-		int ePt = entry[i];
-		sz += itos(ePt) + ", ";
-	}
-
-	//LPRINT(2, sz);
-//	print_line(sz);
-	return sz;
-}
-
-
-
-void LMainCamera::AddLUT(int p0, int p1, ePoint pts[2])
-{
-	unsigned int bit0 = 1 << p0;
-	unsigned int bit1 = 1 << p1;
-
-	// all entries of the LUT that have plane 0 set and plane 1 not set
-	for (unsigned int n=0; n<64; n++)
-	{
-		// if bit0 not set
-		if (!(n & bit0))
-			continue;
-
-		// if bit1 set
-		if (n & bit1)
-			continue;
-
-		// meets criteria
-		AddLUT_Entry(n, pts);
-	}
-}
-
-void LMainCamera::AddLUT_Entry(unsigned int n, ePoint pts[2])
-{
-	assert (n < LUT_SIZE);
-	LVector<uint8_t> &entry = m_LUT[n];
-
-	const ePoint &a = pts[0];
-	const ePoint &b = pts[1];
-
-	entry.push_back(pts[0]);
-	entry.push_back(pts[1]);
-}
-
-void LMainCamera::CompactLUT_Entry(int n)
-{
-	assert (n < LUT_SIZE);
-	LVector<uint8_t> &entry = m_LUT[n];
-
-	int nPairs = entry.size() / 2;
-
-	if (nPairs == 0)
-		return;
-
-	LVector<uint8_t> temp;
-	temp.reserve(16); // 8 max?
-
-	String sz;
-	sz = "Compact LUT" + itos(n) + ":\t";
-	sz += DebugStringLUT_Entry(entry);
-	print_line(sz);
-
-	// add first pair
-	temp.push_back(entry[0]);
-	temp.push_back(entry[1]);
-	unsigned int BFpairs = 1;
-
-	sz = DebugStringLUT_Entry(temp) + " -> ";
-	print_line(sz);
-
-	// attempt to add a pair each time
-	for (int done=1; done<nPairs; done++)
-	{
-		sz = "done " + itos(done) + ": ";
-		// find a free pair
-		for (int p=1; p<nPairs; p++)
-		{
-			unsigned int bit = 1 << p;
-			// is it done already?
-			if (BFpairs & bit)
-				continue;
-
-			// there must be at least 1 free pair
-			// attempt to add
-			int a = entry[p * 2];
-			int b = entry[(p * 2)+1];
-
-			sz += "[" + itos(a) + "-" + itos(b) + "], ";
-
-			int foundA = temp.find(a);
-			int foundB = temp.find(b);
-
-			// special case, if they are both already in the list, no need to add
-			// as this is a link from the tail to the head of the list
-			if ((foundA != -1) && (foundB != -1))
-			{
-				sz += "foundAB link " + itos(foundA) + ", " + itos(foundB) + " ";
-				BFpairs |= bit;
-				goto found;
-			}
-
-			// find a
-			if (foundA != -1)
-			{
-				sz += "foundA " + itos(foundA) + " ";
-				temp.insert(foundA+1, b);
-				BFpairs |= bit;
-				goto found;
-			}
-
-			// find b
-			if (foundB != -1)
-			{
-				sz += "foundB " + itos(foundB) + " ";
-				temp.insert(foundB, a);
-				BFpairs |= bit;
-				goto found;
-			}
-
-		} // check each pair for adding
-
-		// if we got here before finding a link, the whole set of planes is INVALID
-		// e.g. far and near plane only, does not create continuous sillouhette of edges
-		print_line("\tINVALID");
-		entry.clear();
-		return;
-
-		found:;
-		print_line(sz);
-		sz = "\ttemp now : " + DebugStringLUT_Entry(temp);
-		print_line(sz);
-
-	}
-
-	// temp should now be the sorted entry .. delete the old one and replace by temp
-	entry.clear();
-	entry.copy_from(temp);
 }
 
 
@@ -497,10 +566,31 @@ bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LCamera &lca
 	LPRINT_RUN(2, "LOOKUP " + itos(lookup));
 
 	assert (lookup < LUT_SIZE);
+
+	// deal with special case... if the light is INSIDE the view frustum (i.e. all planes face away)
+	// then we will add the camera frustum planes to clip the light volume .. there is no need to
+	// render shadow casters outside the frustum as shadows can never re-enter the frustum.
+	if (lookup == 63)
+	{
+		for (int n=0; n<m_Planes.size(); n++)
+		{
+			planes.push_back(m_Planes[n]);
+		}
+
+		return true;
+	}
+
+
+#ifdef LMAINCAMERA_CALC_LUT
 	const LVector<uint8_t> &entry = m_LUT[lookup];
 
 	// each edge forms a plane
 	int nEdges = entry.size()-1;
+#else
+	uint8_t * entry = &m_LUT_Entries[lookup][0];
+	int nEdges = m_LUT_EntrySizes[lookup] - 1;
+#endif
+
 
 	for (int e=0; e<nEdges; e++)
 	{
@@ -527,7 +617,7 @@ bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LCamera &lca
 			//print_line(String(pt0));
 		}
 
-		for (int e=0; e<entry.size(); e++)
+		for (int e=0; e<nEdges+1; e++)
 		{
 			int i = entry[e];
 			LPRINT_RUN(2, "\t" + m_szPoints[i]);
@@ -591,4 +681,73 @@ bool LMainCamera::Prepare(LRoomManager &manager, Camera * pCam)
 
 	return true;
 }
+
+
+
+uint8_t LMainCamera::m_LUT_Entries[64][8] = {
+{0, 0, 0, 0, 0, 0, 0, },
+{7, 6, 4, 5, 0, 0, 0, },
+{1, 0, 2, 3, 0, 0, 0, },
+{0, 0, 0, 0, 0, 0, 0, },
+{1, 5, 4, 0, 0, 0, 0, },
+{1, 5, 7, 6, 4, 0, 0, },
+{4, 0, 2, 3, 1, 5, 0, },
+{5, 7, 6, 4, 0, 2, 3, },
+{0, 4, 6, 2, 0, 0, 0, },
+{0, 4, 5, 7, 6, 2, 0, },
+{6, 2, 3, 1, 0, 4, 0, },
+{2, 3, 1, 0, 4, 5, 7, },
+{0, 1, 5, 4, 6, 2, 0, },
+{0, 1, 5, 7, 6, 2, 0, },
+{6, 2, 3, 1, 5, 4, 0, },
+{2, 3, 1, 5, 7, 6, 0, },
+{2, 6, 7, 3, 0, 0, 0, },
+{2, 6, 4, 5, 7, 3, 0, },
+{7, 3, 1, 0, 2, 6, 0, },
+{3, 1, 0, 2, 6, 4, 5, },
+{0, 0, 0, 0, 0, 0, 0, },
+{2, 6, 4, 0, 1, 5, 7, },
+{7, 3, 1, 5, 4, 0, 2, },
+{0, 0, 0, 0, 0, 0, 0, },
+{2, 0, 4, 6, 7, 3, 0, },
+{2, 0, 4, 5, 7, 3, 0, },
+{7, 3, 1, 0, 4, 6, 0, },
+{3, 1, 0, 4, 5, 7, 0, },
+{2, 0, 1, 5, 4, 6, 7, },
+{2, 0, 1, 5, 7, 3, 0, },
+{7, 3, 1, 5, 4, 6, 0, },
+{3, 1, 5, 7, 0, 0, 0, },
+{3, 7, 5, 1, 0, 0, 0, },
+{3, 7, 6, 4, 5, 1, 0, },
+{5, 1, 0, 2, 3, 7, 0, },
+{7, 6, 4, 5, 1, 0, 2, },
+{3, 7, 5, 4, 0, 1, 0, },
+{3, 7, 6, 4, 0, 1, 0, },
+{5, 4, 0, 2, 3, 7, 0, },
+{7, 6, 4, 0, 2, 3, 0, },
+{0, 0, 0, 0, 0, 0, 0, },
+{3, 7, 6, 2, 0, 4, 5, },
+{5, 1, 0, 4, 6, 2, 3, },
+{0, 0, 0, 0, 0, 0, 0, },
+{3, 7, 5, 4, 6, 2, 0, },
+{3, 7, 6, 2, 0, 1, 0, },
+{5, 4, 6, 2, 3, 7, 0, },
+{7, 6, 2, 3, 0, 0, 0, },
+{3, 2, 6, 7, 5, 1, 0, },
+{3, 2, 6, 4, 5, 1, 0, },
+{5, 1, 0, 2, 6, 7, 0, },
+{1, 0, 2, 6, 4, 5, 0, },
+{3, 2, 6, 7, 5, 4, 0, },
+{3, 2, 6, 4, 0, 1, 0, },
+{5, 4, 0, 2, 6, 7, 0, },
+{6, 4, 0, 2, 0, 0, 0, },
+{3, 2, 0, 4, 6, 7, 5, },
+{3, 2, 0, 4, 5, 1, 0, },
+{5, 1, 0, 4, 6, 7, 0, },
+{1, 0, 4, 5, 0, 0, 0, },
+{0, 0, 0, 0, 0, 0, 0, },
+{3, 2, 0, 1, 0, 0, 0, },
+{5, 4, 6, 7, 0, 0, 0, },
+{0, 0, 0, 0, 0, 0, 0, },
+};
 
