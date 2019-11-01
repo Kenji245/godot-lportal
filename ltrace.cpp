@@ -16,7 +16,7 @@ void LTrace::Trace_Prepare(LRoomManager &manager, const LSource &cam, Lawn::LBit
 	m_pCamera = &cam;
 
 	// default
-	m_TraceFlags = CULL_SOBS | CULL_DOBS | TOUCH_ROOMS;
+	m_TraceFlags = CULL_SOBS | CULL_DOBS | TOUCH_ROOMS | MAKE_ROOM_VISIBLE;
 
 	m_pBF_SOBs = &BF_SOBs;
 //	m_pBF_DOBs = &BF_DOBs;
@@ -129,6 +129,156 @@ void LTrace::CullDOBs(LRoom &room, const LVector<Plane> &planes)
 }
 
 
+void LTrace::Trace_Light(LRoomManager &manager, const LLight &light, eLightRun eRun)
+{
+	m_pManager = &manager;
+
+	// can only deal with lights in rooms for now
+	if (light.m_Source.m_RoomID == -1)
+	{
+		WARN_PRINT_ONCE("LTrace::Trace_Light can only trace lights in rooms");
+		return;
+	}
+
+	LRoom * pRoom = manager.GetRoom(light.m_Source.m_RoomID);
+	if (!pRoom)
+		return;
+
+	const LSource &cam = light.m_Source;
+
+	unsigned int pool_member = manager.m_Pool.Request();
+	assert (pool_member != -1);
+
+	LVector<Plane> &planes = manager.m_Pool.Get(pool_member);
+	planes.clear();
+
+	// we now need to trace either just DOBs (in the case of static lights)
+	// or SOBs and DOBs (in the case of dynamic lights)
+	LRoomManager::LLightRender &lr = manager.m_LightRender;
+	lr.m_BF_Temp_SOBs.Blank();
+	lr.m_Temp_Visible_SOBs.clear();
+	lr.m_BF_Temp_Visible_Rooms.Blank();
+	lr.m_Temp_Visible_Rooms.clear();
+
+	switch (eRun)
+	{
+	// finding all shadow casters at runtime
+	case LR_ALL:
+		{
+			//Trace_Prepare(manager, cam, lr.m_BF_Temp_SOBs, manager.m_BF_visible_rooms, lr.m_Temp_Visible_SOBs, *manager.m_pCurr_VisibleRoomList);
+			Trace_Prepare(manager, cam, lr.m_BF_Temp_SOBs, lr.m_BF_Temp_Visible_Rooms, lr.m_Temp_Visible_SOBs, lr.m_Temp_Visible_Rooms);
+
+			Trace_SetFlags(CULL_SOBS | CULL_DOBS | MAKE_ROOM_VISIBLE);
+
+			// create subset planes of light frustum and camera frustum
+			manager.m_MainCamera.AddCameraLightPlanes(manager, cam, planes);
+		}
+		break;
+	// finding only visible rooms at runtime
+	case LR_ROOMS:
+		{
+			Trace_Prepare(manager, cam, lr.m_BF_Temp_SOBs, lr.m_BF_Temp_Visible_Rooms, lr.m_Temp_Visible_SOBs, lr.m_Temp_Visible_Rooms);
+
+			// we ONLY want a list of rooms hit
+			Trace_SetFlags(MAKE_ROOM_VISIBLE);
+		}
+		break;
+	// finding all in preconversion
+	case LR_CONVERT:
+		{
+			Trace_Prepare(manager, cam, lr.m_BF_Temp_SOBs, lr.m_BF_Temp_Visible_Rooms, lr.m_Temp_Visible_SOBs, lr.m_Temp_Visible_Rooms);
+
+			// we want sobs but not to touch rooms
+			m_TraceFlags = CULL_SOBS | MAKE_ROOM_VISIBLE; //  | CULL_DOBS | TOUCH_ROOMS;
+		}
+		break;
+	}
+
+
+	Trace_Begin(*pRoom, planes);
+
+	// we no longer need these planes
+	manager.m_Pool.Free(pool_member);
+
+}
+
+
+void LTrace::AddSpotlightPlanes(LVector<Plane> &planes) const
+{
+	Plane p(m_pCamera->m_ptPos, -m_pCamera->m_ptDir);
+	planes.push_back(p);
+
+	// this is kinda crappy, because ideally we'd want a cone, but instead we'll fake a frustum
+	Vector3 pts[4];
+
+	// assuming here that d is normalized!
+	const Vector3 &d = m_pCamera->m_ptDir;
+	const Vector3 &ptCam = m_pCamera->m_ptPos;
+
+	assert (d.length_squared() < 1.1f);
+	assert (d.length_squared() > 0.9f);
+
+	// spotlight has no 'up' vector, as it is regular shape around direction axis
+	// so we can use anything for side vector
+
+	// this might balls up with a light pointing straight up
+	Vector3 ptSide = Vector3(0, 1, 0).cross(d);
+
+	float l = ptSide.length();
+	if (l < 0.1f)
+	{
+		// special case straight up, lets cross against something else
+		ptSide = d.cross(Vector3(1, 0, 0));
+		l = ptSide.length();
+		assert (l);
+	}
+
+	// unitize side
+	ptSide *= 1.0 / l;
+
+	Vector3 ptUp = ptSide.cross(d);
+	ptUp.normalize();
+
+	// now we've got the vecs, lets create some planes
+
+	// spotlight spread definition (light.cpp, line 146)
+	//float size = Math::tan(Math::deg2rad(param[PARAM_SPOT_ANGLE])) * len;
+
+	// this is the size at distance 1 .. it would be more efficient to calc distance at which sides were 1, but whatever...
+	float size = Math::tan(Math::deg2rad(m_pCamera->m_fSpread));
+
+	ptSide *= size; // or half size? not sure yet
+	ptUp *= -size;
+
+	// pts will be bot left, top left, top right, bot right
+	Vector3 ptEx = ptCam + d;
+
+	pts[0] = ptEx - ptSide - ptUp;
+	pts[1] = ptEx - ptSide + ptUp;
+	pts[2] = ptEx + ptSide + ptUp;
+	pts[3] = ptEx + ptSide - ptUp;
+
+	Plane left(ptCam, pts[0], pts[1], COUNTERCLOCKWISE);
+	Plane top(ptCam, pts[1], pts[2], COUNTERCLOCKWISE);
+	Plane right(ptCam, pts[2], pts[3], COUNTERCLOCKWISE);
+	Plane bottom(ptCam, pts[3], pts[0], COUNTERCLOCKWISE);
+
+	planes.push_back(left);
+	planes.push_back(top);
+	planes.push_back(right);
+	planes.push_back(bottom);
+
+	// debug
+	if (LMAN->m_bDebugFrustums)
+	{
+		for (int n=0; n<4; n++)
+		{
+			LMAN->m_DebugFrustums.push_back(ptCam);
+			LMAN->m_DebugFrustums.push_back(pts[n]);
+		}
+	}
+}
+
 void LTrace::Trace_Begin(LRoom &room, LVector<Plane> &planes)
 {
 	int first_plane = 0;
@@ -138,12 +288,13 @@ void LTrace::Trace_Begin(LRoom &room, LVector<Plane> &planes)
 	case LSource::ST_SPOTLIGHT:
 		{
 			// special cases of spotlight, add some extra planes to define the cone
-			Plane p(m_pCamera->m_ptPos, -m_pCamera->m_ptDir);
-			planes.push_back(p);
+			AddSpotlightPlanes(planes);
 		}
 		break;
 	case LSource::ST_CAMERA:
 		first_plane = 1;
+		break;
+	default:
 		break;
 	}
 
@@ -334,8 +485,11 @@ void LTrace::DetectFirstTouch(LRoom &room)
 	{
 		m_pBF_Rooms->SetBit(room.m_RoomID, true);
 
-		// keep track of which rooms are shown this trace
-		m_pVisible_Rooms->push_back(room.m_RoomID);
+		if (m_TraceFlags & MAKE_ROOM_VISIBLE)
+		{
+			// keep track of which rooms are shown this trace
+			m_pVisible_Rooms->push_back(room.m_RoomID);
+		}
 
 		// camera and light traces
 		if (m_TraceFlags & TOUCH_ROOMS)

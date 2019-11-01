@@ -208,13 +208,24 @@ void LRoom::AddShadowCasters(LRoomManager &manager)
 {
 	LPRINT_RUN(2, "ADDSHADOWCASTERS room " + get_name() + ", " + itos(m_iNumShadowCasters_SOB) + " shadow casters");
 
+#ifdef LDEBUG_LIGHT_AFFECTED_ROOMS
+	manager.DebugString_Add("Room " + itos(m_RoomID) + " local lights : ");
+#endif
+
 	// add all the active lights in this room
 	for (int n=0; n<m_LocalLights.size(); n++)
 	{
 		int lightID = m_LocalLights[n];
 		manager.Light_FrameProcess(lightID);
+
+		#ifdef LDEBUG_LIGHT_AFFECTED_ROOMS
+			manager.DebugString_Add(itos(lightID) + ", ");
+		#endif
 	}
 
+#ifdef LDEBUG_LIGHT_AFFECTED_ROOMS
+	manager.DebugString_Add("\n");
+#endif
 
 	// new!! use precalced list of shadow casters
 //	int last = m_iFirstShadowCaster_SOB + m_iNumShadowCasters_SOB;
@@ -390,7 +401,7 @@ void LRoom::Debug_ShowAll(bool bActive)
 
 }
 
-
+/*
 void LRoom::FirstTouch(LRoomManager &manager)
 {
 	// set the frame counter
@@ -416,8 +427,9 @@ void LRoom::FirstTouch(LRoomManager &manager)
 	for (int n=0; n<m_DOBs.size(); n++)
 		m_DOBs[n].m_bVisible = false;
 }
+*/
 
-
+/*
 void LRoom::DetermineVisibility_Recursive(LRoomManager &manager, int depth, const LSource &cam, const LVector<Plane> &planes, int first_portal_plane)
 {
 	// prevent too much depth
@@ -654,5 +666,5 @@ void LRoom::DetermineVisibility_Recursive(LRoomManager &manager, int depth, cons
 
 	} // for p through portals
 }
-
+*/
 

@@ -636,8 +636,7 @@ bool LMainCamera::Prepare(LRoomManager &manager, Camera * pCam)
 	if (m_Points.size() != 8)
 		m_Points.resize(8);
 
-	Transform p_transform = pCam->get_global_transform();
-//	Transform p_transform = pCam->get_transform();
+//	Transform p_transform = pCam->get_global_transform();
 
 	//	Vector<Plane> planes = get_projection_planes(Transform());
 	const CameraMatrix::Planes intersections[8][3] = {
@@ -664,9 +663,9 @@ bool LMainCamera::Prepare(LRoomManager &manager, Camera * pCam)
 	}
 
 
-#define PUSH_PT(a) manager.m_DebugLightVolumes.push_back(m_Points[a])
+#define PUSH_PT(a) manager.m_DebugFrustums.push_back(m_Points[a])
 
-	if (manager.m_bDebugLightVolumes)
+	if (manager.m_bDebugFrustums)
 	{
 		PUSH_PT(PT_NEAR_LEFT_TOP);
 		PUSH_PT(PT_FAR_LEFT_TOP);

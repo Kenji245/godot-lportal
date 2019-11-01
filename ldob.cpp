@@ -72,6 +72,9 @@ void LSource::Source_SetDefaults()
 	m_fSpread = 0.0f;
 	m_fMaxDist = 100.0f;
 	m_RoomID = -1;
+
+	// spotlight spread definition (light.cpp, line 146)
+	// float size = Math::tan(Math::deg2rad(param[PARAM_SPOT_ANGLE])) * len;
 }
 
 String LSource::MakeDebugString() const

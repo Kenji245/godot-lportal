@@ -76,7 +76,7 @@ void LRoomConverter::Convert(LRoomManager &manager, bool bVerbose, bool bPrepara
 
 	int count = CountRooms();
 
-	int num_global_lights = LMAN->m_Lights.size();
+	//int num_global_lights = LMAN->m_Lights.size();
 
 	// make sure bitfield is right size for number of rooms
 	LMAN->m_BF_visible_rooms.Create(count);
@@ -406,19 +406,53 @@ void LRoomConverter::Convert_Lights()
 	}
 }
 
+
 void LRoomConverter::Light_Trace(int iLightID)
 {
+	// get the light
+	LLight &l = LMAN->m_Lights[iLightID];
+	LPRINT(5,"_____________________________________________________________");
+	LPRINT(5,"\nLight_Trace " + itos (iLightID));
+
+	LMAN->m_Trace.Trace_Light(*LMAN, l, LTrace::LR_CONVERT);
+
+	// now save the data from the trace
+	LRoomManager::LLightRender &lr = LMAN->m_LightRender;
+
+	// visible rooms
+	for (int n=0; n<lr.m_Temp_Visible_Rooms.size(); n++)
+	{
+		int room_id = lr.m_Temp_Visible_Rooms[n];
+		LRoom &room = *LMAN->GetRoom(room_id);
+
+		room.AddLocalLight(iLightID);
+
+		// store the affected room on the light
+		l.AddAffectedRoom(room_id);
+	}
+
+
+	// sobs
+	for (int n=0; n<lr.m_Temp_Visible_SOBs.size(); n++)
+	{
+		int sob_id = lr.m_Temp_Visible_SOBs[n];
+
+		// first?
+		if (!l.m_NumCasters)
+			l.m_FirstCaster = LMAN->m_LightCasters_SOB.size();
+
+		LMAN->m_LightCasters_SOB.push_back(sob_id);
+		l.m_NumCasters++;
+	}
+
+	LPRINT(5, itos(lr.m_Temp_Visible_Rooms.size()) + " visible rooms, " + itos (lr.m_Temp_Visible_SOBs.size()) + " visible SOBs.\n");
+
+/*
 	// blank this each time as it is used to create the list of casters
 	LMAN->m_BF_caster_SOBs.Blank();
 
-	// get the light
-	LLight &l = LMAN->m_Lights[iLightID];
-
-	LPRINT(5,"\nLight_Trace " + itos (iLightID) + " direction " + l.m_Source.m_ptDir);
-
 	// reset the planes pool for each render out from the source room
 	LMAN->m_Pool.Reset();
-
 
 	// the first set of planes are blank
 	unsigned int pool_member = LMAN->m_Pool.Request();
@@ -430,9 +464,10 @@ void LRoomConverter::Light_Trace(int iLightID)
 	Lawn::LDebug::m_iTabDepth = 0;
 
 	Light_TraceRecursive(0, LMAN->m_Rooms[l.m_Source.m_RoomID], l, iLightID, planes);
+	*/
 }
 
-
+/*
 void LRoomConverter::Light_TraceRecursive(int depth, LRoom &lroom, LLight &light,  int iLightID, const LVector<Plane> &planes)
 {
 	// prevent too much depth
@@ -602,7 +637,7 @@ void LRoomConverter::Light_TraceRecursive(int depth, LRoom &lroom, LLight &light
 	}
 
 }
-
+*/
 
 void LRoomConverter::Convert_ShadowCasters()
 {
@@ -767,6 +802,7 @@ int LRoomConverter::CountRooms()
 //	return;
 //}
 
+/*
 void LRoomConverter::Light_AddCaster_SOB(LLight &light, int sobID)
 {
 	// we will reuse the rendering bitflags for shadow casters for this ... to check for double entries (fnaa fnaa)
@@ -786,7 +822,7 @@ void LRoomConverter::Light_AddCaster_SOB(LLight &light, int sobID)
 	LMAN->m_LightCasters_SOB.push_back(sobID);
 	light.m_NumCasters++;
 }
-
+*/
 
 void LRoomConverter::LRoom_AddShadowCaster_SOB(LRoom &lroom, int sobID)
 {

@@ -92,8 +92,8 @@ public:
 	const String &get_name() const {return m_szName;}
 
 	// main function
-	void DetermineVisibility_Recursive(LRoomManager &manager, int depth, const LSource &cam, const LVector<Plane> &planes, int first_portal_plane = 1);
-	void FirstTouch(LRoomManager &manager);
+//	void DetermineVisibility_Recursive(LRoomManager &manager, int depth, const LSource &cam, const LVector<Plane> &planes, int first_portal_plane = 1);
+//	void FirstTouch(LRoomManager &manager);
 
 
 	// allows us to show / hide all dobs as the room visibility changes

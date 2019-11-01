@@ -158,6 +158,7 @@ private:
 	void ShowAll(bool bShow);
 	void DebugString_Set(String sz) {m_szDebugString = sz;}
 	void DebugString_Add(String sz) {m_szDebugString += sz;}
+	void DebugString_Light_AffectedRooms(int light_id);
 
 	// now we are centralizing the tracing out from static and dynamic lights for each frame to this function
 	bool LightCreate(Light * pLight, int roomID);
@@ -188,11 +189,13 @@ public:
 	bool m_bDebugBounds;
 	bool m_bDebugLights;
 	bool m_bDebugLightVolumes;
+	bool m_bDebugFrustums;
 
 	// the planes are shown as a list of lines from the camera to the portal verts
 	LVector<Vector3> m_DebugPlanes;
 	LVector<Vector3> m_DebugPortalLightPlanes;
 	LVector<Vector3> m_DebugLightVolumes;
+	LVector<Vector3> m_DebugFrustums;
 
 	// we are now referencing the rooms indirectly via a nodepath rather than directly being children
 	// of the LRoomManager node
@@ -206,9 +209,12 @@ private:
 	ObjectID m_ID_DebugBounds;
 	ObjectID m_ID_DebugLights;
 	ObjectID m_ID_DebugLightVolumes;
+	ObjectID m_ID_DebugFrustums;
+
 	Ref<SpatialMaterial> m_mat_Debug_Planes;
 	Ref<SpatialMaterial> m_mat_Debug_Bounds;
 	Ref<SpatialMaterial> m_mat_Debug_LightVolumes;
+	Ref<SpatialMaterial> m_mat_Debug_Frustums;
 	String m_szDebugString;
 
 	// unchecked
@@ -272,6 +278,8 @@ public:
 	void rooms_set_debug_planes(bool bActive);
 	void rooms_set_debug_bounds(bool bActive);
 	void rooms_set_debug_lights(bool bActive);
+	void rooms_set_debug_shadows(bool bActive);
+	void rooms_set_debug_frustums(bool bActive);
 
 	// 0 to 6 .. defaults to 4 which is (2) in our priorities (i.e. 6 - level)
 	void rooms_set_logging(int level);
