@@ -32,6 +32,7 @@
 
 #include "lroom.h"
 #include "lportal.h"
+#include "larea.h"
 #include "ltrace.h"
 #include "lmain_camera.h"
 
@@ -45,6 +46,7 @@ class LRoomManager : public Spatial {
 	friend class LRoomConverter;
 	friend class LHelper;
 	friend class LTrace;
+	friend class LMainCamera;
 
 
 	// godot ID of the camera (which should be registered as a DOB to allow moving between rooms)
@@ -91,17 +93,22 @@ private:
 	// lists of rooms and portals, contiguous list so cache friendly
 	LVector<LRoom> m_Rooms;
 	LVector<LPortal> m_Portals;
+	LVector<LArea> m_Areas;
 
 	// static objects
 	LVector<LSob> m_SOBs;
 
 	// lights
 	LVector<LLight> m_Lights;
+
 	// active lights
 	LVector<int> m_ActiveLights;
 	LVector<int> m_ActiveLights_prev;
 	Lawn::LBitField_Dynamic m_BF_ActiveLights;
 	Lawn::LBitField_Dynamic m_BF_ActiveLights_prev;
+
+	// some lights may be processed on a frame but found not to intersect the view frustum
+	Lawn::LBitField_Dynamic m_BF_ProcessedLights;
 
 	// SHADOWS
 	// master list of shadow casters for each room
@@ -109,6 +116,10 @@ private:
 
 	// master list of casters for each light (precalculated list)
 	LVector<uint32_t> m_LightCasters_SOB;
+
+	// AREAS
+	// master list of lights affecting each area
+	LVector<uint32_t> m_AreaLights;
 
 	// keep all the light rendering stuff together
 	struct LLightRender
@@ -161,10 +172,10 @@ private:
 	void DebugString_Light_AffectedRooms(int light_id);
 
 	// now we are centralizing the tracing out from static and dynamic lights for each frame to this function
-	bool LightCreate(Light * pLight, int roomID);
+	bool LightCreate(Light * pLight, int roomID, String szArea = "");
 	void Light_UpdateTransform(LLight &light, const Light &glight) const;
 	void Light_FrameProcess(int lightID);
-	void Light_FindCasters(int lightID);
+	bool Light_FindCasters(int lightID);
 
 
 	// helper funcs
@@ -311,8 +322,8 @@ public:
 	int dob_get_room_id(Node * pDOB);
 
 	// LIGHTS
-	// global lights that will apply to all rooms
-	bool light_register(Node * pLightNode);
+	// global directional lights that will apply to all rooms
+	bool light_register(Node * pLightNode, String szArea);
 
 	// dynamic lights
 	bool dynamic_light_register(Node * pLightNode, float radius);

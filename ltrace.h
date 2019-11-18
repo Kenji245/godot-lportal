@@ -17,6 +17,7 @@ public:
 		CULL_DOBS = 1 << 1,
 		TOUCH_ROOMS = 1 << 2,
 		MAKE_ROOM_VISIBLE = 1 << 3,
+		DONT_TRACE_PORTALS = 1 << 4,
 	};
 
 	enum eLightRun
@@ -33,7 +34,7 @@ public:
 	void Trace_Begin(LRoom &room, LVector<Plane> &planes);
 
 	// simpler method of doing a trace for lights, no need to call prepare and begin
-	void Trace_Light(LRoomManager &manager, const LLight &light, eLightRun eRun);
+	bool Trace_Light(LRoomManager &manager, const LLight &light, eLightRun eRun);
 
 private:
 	void AddSpotlightPlanes(LVector<Plane> &planes) const;

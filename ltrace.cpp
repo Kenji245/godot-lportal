@@ -129,20 +129,32 @@ void LTrace::CullDOBs(LRoom &room, const LVector<Plane> &planes)
 }
 
 
-void LTrace::Trace_Light(LRoomManager &manager, const LLight &light, eLightRun eRun)
+bool LTrace::Trace_Light(LRoomManager &manager, const LLight &light, eLightRun eRun)
 {
 	m_pManager = &manager;
 
-	// can only deal with lights in rooms for now
-	if (light.m_Source.m_RoomID == -1)
-	{
-		WARN_PRINT_ONCE("LTrace::Trace_Light can only trace lights in rooms");
-		return;
-	}
 
-	LRoom * pRoom = manager.GetRoom(light.m_Source.m_RoomID);
-	if (!pRoom)
-		return;
+	LRoom * pRoom;
+
+	// non area light
+	if (light.m_iArea == -1)
+	{
+		// can only deal with lights in rooms for now
+		if (light.m_Source.m_RoomID == -1)
+		{
+			WARN_PRINT_ONCE("LTrace::Trace_Light can only trace lights in rooms");
+			return true;
+		}
+
+		pRoom = manager.GetRoom(light.m_Source.m_RoomID);
+		if (!pRoom)
+			return true;
+	}
+	else
+	{
+		// area light
+		pRoom = 0;
+	}
 
 	const LSource &cam = light.m_Source;
 
@@ -160,6 +172,8 @@ void LTrace::Trace_Light(LRoomManager &manager, const LLight &light, eLightRun e
 	lr.m_BF_Temp_Visible_Rooms.Blank();
 	lr.m_Temp_Visible_Rooms.clear();
 
+	bool bLightInView = true;
+
 	switch (eRun)
 	{
 	// finding all shadow casters at runtime
@@ -171,7 +185,7 @@ void LTrace::Trace_Light(LRoomManager &manager, const LLight &light, eLightRun e
 			Trace_SetFlags(CULL_SOBS | CULL_DOBS | MAKE_ROOM_VISIBLE);
 
 			// create subset planes of light frustum and camera frustum
-			manager.m_MainCamera.AddCameraLightPlanes(manager, cam, planes);
+			bLightInView = manager.m_MainCamera.AddCameraLightPlanes(manager, cam, planes);
 		}
 		break;
 	// finding only visible rooms at runtime
@@ -195,11 +209,41 @@ void LTrace::Trace_Light(LRoomManager &manager, const LLight &light, eLightRun e
 	}
 
 
-	Trace_Begin(*pRoom, planes);
+	if (bLightInView)
+	{
+		// non area light
+		if (pRoom)
+		{
+			Trace_Begin(*pRoom, planes);
+		}
+		else
+		{
+			// area light
+
+			// area lights don't go through portals, e.g. coming from above like sunlight
+			// they instead have a predefined list of rooms governed by the area
+			m_TraceFlags |= DONT_TRACE_PORTALS;
+
+			// go through each affected room
+			for (int r=0; r<light.m_NumAffectedRooms; r++)
+			{
+				int room_id = light.m_AffectedRooms[r];
+				LRoom * pRoom = manager.GetRoom(room_id);
+
+				// should not happen, assert?
+				assert (pRoom);
+
+				// trace as usual but don't go through the portals
+				Trace_Recursive(0, *pRoom, planes, 0);
+			}
+
+		} // if area light
+	} // if light in view
 
 	// we no longer need these planes
 	manager.m_Pool.Free(pool_member);
 
+	return bLightInView;
 }
 
 
@@ -335,6 +379,8 @@ void LTrace::Trace_Recursive(int depth, LRoom &room, const LVector<Plane> &plane
 		CullDOBs(room, planes);
 
 	// portals
+	if (m_TraceFlags & DONT_TRACE_PORTALS)
+		return;
 
 	// look through portals
 	int nPortals = room.m_iNumPortals;

@@ -18,3 +18,5 @@
 #include "lscene_saver.cpp"
 #include "ltrace.cpp"
 #include "lmain_camera.cpp"
+#include "larea.cpp"
+

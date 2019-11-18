@@ -70,7 +70,7 @@ void LSource::Source_SetDefaults()
 	m_eType = ST_CAMERA;
 	m_eClass = SC_STATIC;
 	m_fSpread = 0.0f;
-	m_fMaxDist = 100.0f;
+	m_fRange = FLT_MAX;
 	m_RoomID = -1;
 
 	// spotlight spread definition (light.cpp, line 146)
@@ -108,6 +108,7 @@ void LLight::Light_SetDefaults()
 	m_NumCasters = 0;
 
 	m_NumAffectedRooms = 0;
+	m_iArea = -1;
 }
 
 bool LLight::AddAffectedRoom(int room_id)

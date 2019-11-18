@@ -4,12 +4,12 @@
 // you won't be able to get frame debugging of the visibility tree though.
 #ifdef DEBUG_ENABLED
 
-//#define LPRINT_RUN(a, b) {String sz;\
-//for (int n=0; n<Lawn::LDebug::m_iTabDepth; n++)\
-//sz += "\t";\
-//LPRINT(a, sz + b);}
+#define LPRINT_RUN(a, b) {String sz;\
+for (int n=0; n<Lawn::LDebug::m_iTabDepth; n++)\
+sz += "\t";\
+LPRINT(a, sz + b);}
 
-#define LPRINT_RUN(a, b) ;
+//#define LPRINT_RUN(a, b) ;
 
 #else
 #define LPRINT_RUN(a, b) ;
@@ -26,6 +26,8 @@ Lawn::LDebug::print(b);\
 {\
 Lawn::LDebug::print(String("\tWARNING : ") + b);\
 }
+
+String ftos(float f) {return String(Variant(f));}
 
 
 namespace Lawn

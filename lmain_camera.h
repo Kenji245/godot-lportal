@@ -34,7 +34,11 @@ public:
 	static const char * m_szPoints[];
 
 	// 6 bits, 6 planes
-	enum {LUT_SIZE = 64,};
+	enum { NUM_CAM_PLANES = 6,
+		NUM_CAM_POINTS = 8,
+		MAX_CULL_PLANES = 16,
+		LUT_SIZE = 64,
+	};
 
 	// create the LUT
 	LMainCamera();
@@ -42,12 +46,16 @@ public:
 	bool Prepare(LRoomManager &manager, Camera * pCam);
 
 	// main use of this object, we can create a clipping volume that is a mix of the light frustum and the camera volume
-	bool AddCameraLightPlanes(LRoomManager &manager, const LSource &lcam, LVector<Plane> &planes) const;
+	bool AddCameraLightPlanes(LRoomManager &manager, const LSource &lsource, LVector<Plane> &planes) const;
 
 	LVector<Plane> m_Planes;
 	LVector<Vector3> m_Points;
 
+	// centre of camera frustum
+	Vector3 m_ptCentre;
+
 private:
+	bool AddCameraLightPlanes_Directional(LRoomManager &manager, const LSource &lsource, LVector<Plane> &planes) const;
 	String String_PlaneBF(unsigned int BF);
 
 #ifdef LMAINCAMERA_CALC_LUT
@@ -67,7 +75,7 @@ private:
 #endif
 
 	// precalculated LUT
-	static uint8_t m_LUT_EntrySizes[64];
-	static uint8_t m_LUT_Entries[64][8];
+	static uint8_t m_LUT_EntrySizes[LUT_SIZE];
+	static uint8_t m_LUT_Entries[LUT_SIZE][8];
 };
 

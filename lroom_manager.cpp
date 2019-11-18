@@ -587,17 +587,23 @@ bool LRoomManager::dob_unregister(Node * pDOB)
 
 void LRoomManager::Light_FrameProcess(int lightID)
 {
-	if (!m_BF_ActiveLights.GetBit(lightID))
+	if (!m_BF_ProcessedLights.GetBit(lightID))
+//	if (!m_BF_ActiveLights.GetBit(lightID))
 	{
-		m_BF_ActiveLights.SetBit(lightID, true);
-		m_ActiveLights.push_back(lightID);
+		m_BF_ProcessedLights.SetBit(lightID, true);
 
-		Light_FindCasters(lightID);
+		// some lights may be processed but found not to intersect the camera frustum
+		if (Light_FindCasters(lightID))
+		{
+			m_BF_ActiveLights.SetBit(lightID, true);
+			m_ActiveLights.push_back(lightID);
+		}
 	}
 }
 
 // now we are centralizing the tracing out from static and dynamic lights for each frame to this function
-void LRoomManager::Light_FindCasters(int lightID)
+// returns false if the entire light should be culled
+bool LRoomManager::Light_FindCasters(int lightID)
 {
 	// add all shadow casters for this light (new method)
 	const LLight &light = m_Lights[lightID];
@@ -625,15 +631,29 @@ void LRoomManager::Light_FindCasters(int lightID)
 	} // static lights have a list of SOB casters
 */
 
-	// can only deal with lights in rooms for now
-	if (light.m_Source.m_RoomID == -1)
-		return;
+	// special case of global area lights
+	if (light.m_iArea != -1)
+	{
+		// special trace for area light
+		if (m_Trace.Trace_Light(*this, light, LTrace::LR_ALL) == false)
+			return false;
+	}
+	else
+	{
+		// can only deal with lights in rooms for now
+		if (light.m_Source.m_RoomID == -1)
+		{
+			return true;
+		}
 
-	LRoom * pRoom = GetRoom(light.m_Source.m_RoomID);
-	if (!pRoom)
-		return;
+		LRoom * pRoom = GetRoom(light.m_Source.m_RoomID);
+		if (!pRoom)
+			return true;
 
-	m_Trace.Trace_Light(*this, light, LTrace::LR_ALL);
+		if (m_Trace.Trace_Light(*this, light, LTrace::LR_ALL) == false)
+			return false;
+
+	} // non-area light
 
 	/*
 	// we now need to trace either just DOBs (in the case of static lights)
@@ -681,6 +701,8 @@ void LRoomManager::Light_FindCasters(int lightID)
 		}
 
 	}
+
+	return true;
 }
 
 void LRoomManager::Light_UpdateTransform(LLight &light, const Light &glight) const
@@ -692,7 +714,7 @@ void LRoomManager::Light_UpdateTransform(LLight &light, const Light &glight) con
 }
 
 // common stuff for global and local light creation
-bool LRoomManager::LightCreate(Light * pLight, int roomID)
+bool LRoomManager::LightCreate(Light * pLight, int roomID, String szArea)
 {
 	// set culling flag for light
 	// 1 is for lighting objects outside the room system
@@ -703,6 +725,12 @@ bool LRoomManager::LightCreate(Light * pLight, int roomID)
 	l.Light_SetDefaults();
 	l.Hidable_Create(pLight);
 	l.m_GodotID = pLight->get_instance_id();
+	//l.m_iArea = areaID;
+
+	// store the area name as a string if an area light
+	// as the areas aren't actually created until calling convert
+	if (szArea != "")
+		l.m_szArea = szArea;
 
 	LSource &lsource = l.m_Source;
 
@@ -712,9 +740,6 @@ bool LRoomManager::LightCreate(Light * pLight, int roomID)
 //	lsource.m_ptPos = tr.origin;
 //	lsource.m_ptDir = -tr.basis.get_axis(2); // or possibly get_axis .. z is what we want
 	lsource.m_RoomID = roomID;
-
-	lsource.m_fMaxDist = pLight->get_param(Light::PARAM_SHADOW_MAX_DISTANCE);
-
 
 	//l.m_eType = LLight::LT_DIRECTIONAL;
 
@@ -730,6 +755,7 @@ bool LRoomManager::LightCreate(Light * pLight, int roomID)
 		LPRINT(2, "\tSPOTLIGHT detected " + pLight->get_name());
 		lsource.m_eType = LSource::ST_SPOTLIGHT;
 		lsource.m_fSpread = pSL->get_param(Light::PARAM_SPOT_ANGLE);
+		lsource.m_fRange = pLight->get_param(Light::PARAM_RANGE);
 
 		bOK = true;
 	}
@@ -739,6 +765,7 @@ bool LRoomManager::LightCreate(Light * pLight, int roomID)
 	{
 		LPRINT(2, "\tOMNILIGHT detected " + pLight->get_name());
 		lsource.m_eType = LSource::ST_OMNI;
+		lsource.m_fRange = pLight->get_param(Light::PARAM_RANGE);
 		bOK = true;
 	}
 
@@ -747,6 +774,9 @@ bool LRoomManager::LightCreate(Light * pLight, int roomID)
 	{
 		LPRINT(2, "\tDIRECTIONALLIGHT detected " + pLight->get_name());
 		lsource.m_eType = LSource::ST_DIRECTIONAL;
+
+		// no range but max distance? NYI
+
 		bOK = true;
 	}
 
@@ -952,9 +982,9 @@ void LRoomManager::DebugString_Light_AffectedRooms(int light_id)
 }
 
 
-bool LRoomManager::light_register(Node * pLightNode)
+bool LRoomManager::light_register(Node * pLightNode, String szArea)
 {
-	CHECK_ROOM_LIST
+	//CHECK_ROOM_LIST
 
 	if (!pLightNode)
 	{
@@ -970,8 +1000,26 @@ bool LRoomManager::light_register(Node * pLightNode)
 		WARN_PRINT_ONCE("light_register : Node is not a light");
 		return false;
 	}
+/*
+	// find the area
+	int area = -1;
+	for (int n=0; n<m_Areas.size(); n++)
+	{
+		if (m_Areas[n].m_szName == szArea)
+		{
+			area = n;
+			break;
+		}
+	}
 
-	return LightCreate(pLight, -1);
+	// area not found?
+	if (area == -1)
+	{
+		LWARN(2, "light_register area not found : " + szArea);
+	}
+	*/
+
+	return LightCreate(pLight, -1, szArea);
 }
 
 
@@ -1304,7 +1352,10 @@ void LRoomManager::ReleaseResources(bool bPrepareConvert)
 	m_LightCasters_SOB.clear();
 	m_Rooms.clear(true);
 	m_Portals.clear(true);
+	m_Areas.clear(true);
 	m_SOBs.clear();
+
+	m_AreaLights.clear(true);
 
 	if (!bPrepareConvert)
 		m_Lights.clear();
@@ -1362,6 +1413,7 @@ void LRoomManager::FrameUpdate_Prepare()
 	m_ActiveLights_prev.copy_from(m_ActiveLights);
 	m_ActiveLights.clear();
 	m_BF_ActiveLights.Blank();
+	m_BF_ProcessedLights.Blank();
 
 	// as we hit visible rooms we will mark them in a bitset, so we can hide any rooms
 	// that are showing that haven't been hit this frame
@@ -1874,7 +1926,7 @@ void LRoomManager::_bind_methods()
 	ClassDB::bind_method(D_METHOD("dob_get_room_id", "dob"), &LRoomManager::dob_get_room_id);
 
 
-	ClassDB::bind_method(D_METHOD("light_register", "light"), &LRoomManager::light_register);
+	ClassDB::bind_method(D_METHOD("light_register", "light", "area"), &LRoomManager::light_register);
 
 	ClassDB::bind_method(D_METHOD("dynamic_light_register", "light", "radius"), &LRoomManager::dynamic_light_register);
 	ClassDB::bind_method(D_METHOD("dynamic_light_register_hint", "light", "radius", "room"), &LRoomManager::dynamic_light_register_hint);

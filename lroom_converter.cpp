@@ -104,10 +104,12 @@ void LRoomConverter::Convert(LRoomManager &manager, bool bVerbose, bool bPrepara
 
 	LMAN->m_BF_ActiveLights.Create(LMAN->m_Lights.size());
 	LMAN->m_BF_ActiveLights_prev.Create(LMAN->m_Lights.size());
+	LMAN->m_BF_ProcessedLights.Create(LMAN->m_Lights.size());
 
 	// must be done after the bitfields
 	Convert_Lights();
 	Convert_ShadowCasters();
+	Convert_AreaLights();
 
 	// hide all in preparation for first frame
 	//LMAN->ShowAll(false);
@@ -122,6 +124,33 @@ void LRoomConverter::Convert(LRoomManager &manager, bool bVerbose, bool bPrepara
 
 
 
+int LRoomConverter::Convert_Rooms_Recursive(Node * pParent, int count, int area)
+{
+	for (int n=0; n<pParent->get_child_count(); n++)
+	{
+		Node * pChild = pParent->get_child(n);
+
+		if (Node_IsRoom(pChild))
+		{
+			Spatial * pSpat = Object::cast_to<Spatial>(pChild);
+			assert (pSpat);
+
+			Convert_Room(pSpat, count++, area);
+		}
+		else if (Node_IsArea(pChild))
+		{
+			// get the area name
+			String szArea = LPortal::FindNameAfter(pChild, "area_");
+
+			// find or create an area with this name
+			int area_child = Area_FindOrCreate(szArea);
+			count = Convert_Rooms_Recursive(pChild, count, area_child);
+		}
+	}
+
+	return count;
+}
+
 
 void LRoomConverter::Convert_Rooms()
 {
@@ -129,21 +158,26 @@ void LRoomConverter::Convert_Rooms()
 
 	// first find all room empties and convert to LRooms
 	int count = 0;
+	int area = -1;
 
-	for (int n=0; n<LROOMLIST->get_child_count(); n++)
+	count = Convert_Rooms_Recursive(LROOMLIST, count, area);
+}
+
+int LRoomConverter::Area_FindOrCreate(String szName)
+{
+	for (int n=0; n<LMAN->m_Areas.size(); n++)
 	{
-		Node * pChild = LROOMLIST->get_child(n);
-
-		if (!Node_IsRoom(pChild))
-			continue;
-
-		Spatial * pSpat = Object::cast_to<Spatial>(pChild);
-		assert (pSpat);
-
-		Convert_Room(pSpat, count++);
+		if (LMAN->m_Areas[n].m_szName == szName)
+			return n;
 	}
 
+	// create
+	LArea area;
+	area.Create(szName);
+	LMAN->m_Areas.push_back(area);
+	return LMAN->m_Areas.size() - 1;
 }
+
 
 int LRoomConverter::FindRoom_ByName(String szName) const
 {
@@ -199,6 +233,13 @@ void LRoomConverter::Convert_Room_FindObjects_Recursive(Node * pParent, LRoom &l
 			continue;
 		}
 
+		// area
+		if (Node_IsArea(pChild))
+		{
+			LRoom_DetectedArea(lroom, pChild);
+			continue;
+		}
+
 		VisualInstance * pVI = Object::cast_to<VisualInstance>(pChild);
 		if (pVI)
 		{
@@ -237,13 +278,21 @@ void LRoomConverter::Convert_Room_FindObjects_Recursive(Node * pParent, LRoom &l
 
 }
 
-bool LRoomConverter::Convert_Room(Spatial * pNode, int lroomID)
+// areaID could be -1 if unset
+bool LRoomConverter::Convert_Room(Spatial * pNode, int lroomID, int areaID)
 {
 	// get the room part of the name
 	String szFullName = pNode->get_name();
 	String szRoom = LPortal::FindNameAfter(pNode, "room_");
 
-	LPRINT(4, "Convert_Room : " + szFullName);
+	if (areaID == -1)
+	{
+		LPRINT(4, "Convert_Room : " + szFullName);
+	}
+	else
+	{
+		LPRINT(4, "Convert_Room : " + szFullName + " area_id " + itos(areaID));
+	}
 
 	// get a reference to the lroom we are writing to
 	LRoom &lroom = LMAN->m_Rooms[lroomID];
@@ -259,6 +308,10 @@ bool LRoomConverter::Convert_Room(Spatial * pNode, int lroomID)
 
 	// create a new LRoom to exchange the children over to, and delete the original empty
 	lroom.m_szName = szRoom;
+
+	// area
+	if (areaID != -1)
+		lroom.m_Areas.push_back(areaID);
 
 	// keep a running bounding volume as we go through the visual instances
 	// to determine the overall bound of the room
@@ -392,6 +445,97 @@ bool LRoomConverter::Convert_Bound(LRoom &lroom, MeshInstance * pMI)
 //	}
 
 //}
+
+void LRoomConverter::Convert_AreaLights()
+{
+	// first identify which lights are area lights, and match area strings to area IDs
+	for (int n=0; n<LMAN->m_Lights.size(); n++)
+	{
+		LLight &l = LMAN->m_Lights[n];
+
+		// global area light?
+		if  (!l.m_Source.IsGlobal())
+			continue;
+
+		assert (l.m_iArea == -1);
+
+		// match area string to area
+		// find the area
+		for (int n=0; n<LMAN->m_Areas.size(); n++)
+		{
+			if (LMAN->m_Areas[n].m_szName == l.m_szArea)
+			{
+				l.m_iArea = n;
+				break;
+			}
+		}
+
+		// area not found?
+		if (l.m_iArea == -1)
+		{
+			LWARN(2, "Convert_AreaLights area not found : " + l.m_szArea);
+		}
+		else
+		{
+			LPRINT(5,"Area light " + itos (n) + " area " + l.m_szArea + " found area_id " + itos(l.m_iArea));
+		}
+	}
+
+
+	// add each light within an area to the area light list
+	for (int a=0; a<LMAN->m_Areas.size(); a++)
+	{
+		LArea &area = LMAN->m_Areas[a];
+
+		for (int n=0; n<LMAN->m_Lights.size(); n++)
+		{
+			LLight &l = LMAN->m_Lights[n];
+
+			int areaID = l.m_iArea;
+			if (areaID != a)
+				continue;
+
+			// this light affects this area
+			if (area.m_iNumLights == 0)
+				area.m_iFirstLight = LMAN->m_AreaLights.size();
+
+			LMAN->m_AreaLights.push_back(n);
+			area.m_iNumLights++;
+
+
+		} // for n
+	} // for a
+
+	// for each global light we can calculate the affected rooms
+	for (int n=0; n<LMAN->m_Lights.size(); n++)
+	{
+		LLight &l = LMAN->m_Lights[n];
+
+		int areaID = l.m_iArea;
+
+		// not a global light
+		if (areaID == -1)
+			continue;
+
+		LPRINT(5,"Area light " + itos (n) + " affected rooms:");
+
+		// add every room in this area to the light affected rooms list
+		for (int r=0; r<LMAN->m_Rooms.size(); r++)
+		{
+			LRoom &room = LMAN->m_Rooms[r];
+			if (room.IsInArea(areaID))
+			{
+				l.AddAffectedRoom(r);
+				LPRINT(5,"\t" + itos (r));
+
+				// store the global lights on the room
+				room.m_GlobalLights.push_back(n);
+			}
+
+		}
+	}
+}
+
 
 void LRoomConverter::Convert_Lights()
 {
@@ -661,7 +805,7 @@ void LRoomConverter::Convert_ShadowCasters()
 			LRoom &lroom = LMAN->m_Rooms[n];
 
 			// global lights affect every room
-			bool bAffectsRoom = true;
+			bool bAffectsRoom = false; // true
 
 			// if the light is local, does it affect this room?
 			if (!light.m_Source.IsGlobal())
@@ -761,8 +905,22 @@ int LRoomConverter::CountRooms()
 
 	for (int n=0; n<nChildren; n++)
 	{
-		if (Node_IsRoom(LROOMLIST->get_child(n)))
+		Node * pChild = LROOMLIST->get_child(n);
+		if (Node_IsRoom(pChild))
 			count++;
+		else
+		{
+			// also check the children if this is an area
+			if (Node_IsArea(pChild))
+			{
+				for (int c=0; c<pChild->get_child_count(); c++)
+				{
+					Node * pChild2 = pChild->get_child(c);
+					if (Node_IsRoom(pChild2))
+						count++;
+				}
+			}
+		}
 	}
 
 	return count;
@@ -1132,6 +1290,26 @@ void LRoomConverter::LRoom_MakePortalFinalList(LRoom &lroom, LTempRoom &troom)
 }
 
 
+
+void LRoomConverter::LRoom_DetectedArea(LRoom &lroom, Node * pNode)
+{
+	// find the area name
+	String szArea = LPortal::FindNameAfter(pNode, "area_");
+
+	// find or create an area with this name
+	int area = Area_FindOrCreate(szArea);
+
+	// check for duplicates? maybe a level design mistake?
+	if (lroom.m_Areas.find(area) != -1)
+	{
+		LWARN(2, "LRoom_DetectedArea : duplicate area in room, ignoring : " + szArea);
+		return;
+	}
+
+	// add it to the lroom
+	lroom.m_Areas.push_back(area);
+}
+
 void LRoomConverter::LRoom_DetectedLight(LRoom &lroom, Node * pNode)
 {
 	Light * pLight = Object::cast_to<Light>(pNode);
@@ -1254,6 +1432,18 @@ bool LRoomConverter::Node_IsLight(Node * pNode) const
 		return false;
 
 	return true;
+}
+
+bool LRoomConverter::Node_IsArea(Node * pNode) const
+{
+	Spatial * pSpat = Object::cast_to<Spatial>(pNode);
+	if (!pSpat)
+		return false;
+
+	if (LPortal::NameStartsWith(pSpat, "area_"))
+		return true;
+
+	return false;
 }
 
 

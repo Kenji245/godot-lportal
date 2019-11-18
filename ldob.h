@@ -107,7 +107,7 @@ public:
 	eSourceClass m_eClass;
 
 	float m_fSpread; // for spotlight
-	float m_fMaxDist; // shadow distance not light distance
+	float m_fRange; // shadow distance not light distance
 
 	// source room
 	int m_RoomID; // or -1 for global lights
@@ -148,4 +148,8 @@ public:
 	// keep a list of the rooms affected by this light
 	uint16_t m_AffectedRooms[MAX_AFFECTED_ROOMS];
 	int m_NumAffectedRooms;
+
+	// for global lights, this is the area or -1 if unset
+	int m_iArea;
+	String m_szArea; // set to the area string in the case of area lights, else ""
 };

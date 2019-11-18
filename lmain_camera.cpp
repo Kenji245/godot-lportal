@@ -3,10 +3,12 @@
 #include "lroom.h"
 #include "ldebug.h"
 #include "lroom_manager.h"
+#include "ldob.h"
 
 #include "scene/3d/camera.h"
 #include "core/math/camera_matrix.h"
 #include "core/math/plane.h"
+#include "core/math/vector3.h"
 
 const char * LMainCamera::m_szPlanes[] = {"NEAR", "FAR", "LEFT", "TOP", "RIGHT", "BOTTOM", };
 const char * LMainCamera::m_szPoints[] = {"FAR_LEFT_TOP", "FAR_LEFT_BOTTOM", "FAR_RIGHT_TOP", "FAR_RIGHT_BOTTOM",
@@ -524,15 +526,120 @@ String LMainCamera::String_PlaneBF(unsigned int BF)
 	return sz;
 }
 
+// returns false if the light is completely culled (does not enter the camera frustum)
+bool LMainCamera::AddCameraLightPlanes_Directional(LRoomManager &manager, const LSource &lsource, LVector<Plane> &planes) const
+{
+	uint32_t lookup = 0;
 
-bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LSource &lcam, LVector<Plane> &planes) const
+	// directional light, we will use dot against the light direction to determine back facing planes
+	for (int n = 0; n < 6; n++)
+	{
+		float dot = m_Planes[n].normal.dot(lsource.m_ptDir);
+		if (dot > 0.0f)
+		{
+			lookup |= 1 << n;
+
+			// add the frustum back plane to the clipping planes
+			planes.push_back(m_Planes[n]);
+		}
+	}
+
+	ERR_FAIL_COND_V(lookup >= LUT_SIZE, true);
+
+	// deal with special case... if the light is INSIDE the view frustum (i.e. all planes face away)
+	// then we will add the camera frustum planes to clip the light volume .. there is no need to
+	// render shadow casters outside the frustum as shadows can never re-enter the frustum.
+
+	if (lookup == 63) // should never happen with directional light?? this may be able to be removed
+	{
+		/*
+		num_cull_planes = 0;
+		for (int n = 0; n < frustum_planes.size(); n++) {
+			//planes.push_back(frustum_planes[n]);
+			add_cull_plane(frustum_planes[n]);
+		}
+		*/
+
+		return true;
+	}
+
+	// each edge forms a plane
+#ifdef LMAINCAMERA_CALC_LUT
+	const LVector<uint8_t> &entry = m_LUT[lookup];
+
+	// each edge forms a plane
+	int nEdges = entry.size()-1;
+#else
+	uint8_t * entry = &m_LUT_Entries[lookup][0];
+	int nEdges = m_LUT_EntrySizes[lookup] - 1;
+#endif
+
+
+	for (int e = 0; e < nEdges; e++) {
+		int i0 = entry[e];
+		int i1 = entry[e + 1];
+		const Vector3 &pt0 = m_Points[i0];
+		const Vector3 &pt1 = m_Points[i1];
+
+		// create a third point from the light direction
+		Vector3 pt2 = pt0 - lsource.m_ptDir;
+
+		// create plane from 3 points
+		Plane p(pt0, pt1, pt2);
+		planes.push_back(p);
+	}
+
+	// last to 0 edge
+	if (nEdges) {
+		int i0 = entry[nEdges]; // last
+		int i1 = entry[0]; // first
+
+		const Vector3 &pt0 = m_Points[i0];
+		const Vector3 &pt1 = m_Points[i1];
+
+		// create a third point from the light direction
+		Vector3 pt2 = pt0 - lsource.m_ptDir;
+
+		// create plane from 3 points
+		Plane p(pt0, pt1, pt2);
+		planes.push_back(p);
+	}
+
+#ifdef LIGHT_CULLER_DEBUG_LOGGING
+	if (is_logging()) {
+		print_line("lcam.pos is " + String(lsource.pos));
+	}
+#endif
+
+	return true;
+}
+
+// returns false if the light is completely culled (does not enter the camera frustum)
+bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LSource &lsource, LVector<Plane> &planes) const
 {
 	// doesn't account for directional lights yet! only points
 
 	// find which of the camera planes are facing away from the light
 	assert (m_Planes.size() == 6);
 
+	// doesn't account for directional lights yet! only points
+	switch (lsource.m_eType)
+	{
+		case LSource::ST_SPOTLIGHT:
+		case LSource::ST_OMNI:
+			break;
+		case LSource::ST_DIRECTIONAL:
+			return AddCameraLightPlanes_Directional(manager, lsource, planes);
+			break;
+		default:
+			return false; // not yet supported
+			break;
+	}
+
 	uint32_t lookup = 0;
+
+	// record the original number of planes in case we need to revert
+	int nPlanesBefore = planes.size();
 
 	// DIRECTIONAL LIGHT
 //	for (int n=0; n<6; n++)
@@ -550,17 +657,116 @@ bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LSource &lca
 	// BRAINWAVE!! Instead of using dot product to compare light direction to plane, we can simply
 	// find out which side of the plane the camera is on!! By definition this marks the point at which the plane
 	// becomes invisible. This works for portals too!
-	for (int n=0; n<6; n++)
-	{
-		float dist = m_Planes[n].distance_to(lcam.m_ptPos);
-		if (dist < 0.0f)
-		{
-			lookup |= 1 << n;
 
-			LPRINT_RUN(2, m_szPlanes[n] + " facing away from light dist " + String(Variant(dist)));
+	// OMNI
+	if (lsource.m_eType == LSource::ST_OMNI)
+	{
+		for (int n=0; n<6; n++)
+		{
+			float dist = m_Planes[n].distance_to(lsource.m_ptPos);
+			if (dist < 0.0f)
+			{
+				lookup |= 1 << n;
+
+				LPRINT_RUN(2, m_szPlanes[n] + " facing away from light dist " + String(Variant(dist)));
+
+				// add the frustum back plane to the clipping planes
+				planes.push_back(m_Planes[n]);
+			}
+			else
+			{
+				// is the light out of range?
+				// This is one of the tests. If the point source is more than range distance from a frustum plane, it can't
+				// be seen
+				if (dist >= lsource.m_fRange)
+				{
+					// if the light is out of range, no need to do anything else, everything will be culled
+					//out_of_range = true;
+					//return false;
+					goto LightCulled;
+				}
+			}
+		}
+	} // if omni
+	else
+	{
+		// SPOTLIGHTs, more complex to cull
+		Vector3 ptConeEnd = lsource.m_ptPos + (lsource.m_ptDir * lsource.m_fRange);
+
+		// this is the radius of the cone at distance 1
+		float radius_at_dist_one = Math::tan(Math::deg2rad(lsource.m_fSpread));
+
+		// the worst case radius of the cone at the end point can be calculated
+		// (the radius will scale linearly with length along the cone)
+		float radius_at_end = radius_at_dist_one * lsource.m_fRange;
+
+		for (int n = 0; n < 6; n++)
+		{
+			float dist = m_Planes[n].distance_to(lsource.m_ptPos);
+			if (dist < 0.0f)
+			{
+				// either the plane is backfacing or we are inside the frustum
+				lookup |= 1 << n;
+
+				// add the frustum back plane to the clipping planes
+				planes.push_back(m_Planes[n]);
+			}
+			else
+			{
+				// the light is in front of the plane
+
+				// is the light out of range?
+				if (dist >= lsource.m_fRange)
+				{
+					//out_of_range = true;
+					//return false;
+					manager.DebugString_Add("Light culled cone start out of range .. source room" + itos(lsource.m_RoomID) + "\n");
+					goto LightCulled;
+				}
+
+				// for a spotlight, we can use an extra test
+				// at this point the cone start is in front of the plane...
+				// if the cone end point is further than the maximum possible distance to the plane
+				// we can guarantee that the cone does not cross the plane, and hence the cone
+				// is outside the frustum
+
+				// side vector (perpendicular to light direction and plane normal)
+				Vector3 ptDirSide = lsource.m_ptDir.cross(m_Planes[n].normal);
+
+				// note this could be near zero length...this is not dealt with yet!!
+				Vector3 ptDirConeClosest = lsource.m_ptDir.cross(ptDirSide);
+
+				// see https://bartwronski.com/2017/04/13/cull-that-cone/
+				ptDirConeClosest.normalize();
+
+				// push out the cone end to the closest point
+				Vector3 ptConeClosest = ptConeEnd + (ptDirConeClosest * radius_at_end);
+
+				float dist_end = m_Planes[n].distance_to(ptConeClosest);
+
+				if (dist_end >= 0.0f)
+				{
+					//out_of_range = true;
+					//return false;
+					manager.DebugString_Add("Light culled cone end out of range .. source room" + itos(lsource.m_RoomID) + "\n");
+					manager.DebugString_Add("cone end radius " + ftos(radius_at_end) + ", dist_end " + ftos(dist_end) + "\n");
+					goto LightCulled;
+				}
+			}
 		}
 	}
 
+	goto NotCulled;
+
+	LightCulled:
+
+	// remove any added planes .. may not be necessary
+	planes.resize(nPlanesBefore);
+
+
+	return false;
+
+	NotCulled:
 
 
 	LPRINT_RUN(2, "LOOKUP " + itos(lookup));
@@ -572,10 +778,12 @@ bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LSource &lca
 	// render shadow casters outside the frustum as shadows can never re-enter the frustum.
 	if (lookup == 63)
 	{
+		/*
 		for (int n=0; n<m_Planes.size(); n++)
 		{
 			planes.push_back(m_Planes[n]);
 		}
+		*/
 
 		return true;
 	}
@@ -600,9 +808,25 @@ bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LSource &lca
 		const Vector3 &pt1 = m_Points[i1];
 
 		// create plane from 3 points
-		Plane p(pt0, pt1, lcam.m_ptPos);
+		Plane p(pt0, pt1, lsource.m_ptPos);
 		planes.push_back(p); // pushing by value, urg!!
 	}
+	
+	// last to 0 edge, NYI!!!
+	if (nEdges)
+	{
+		int i0 = entry[nEdges]; // last
+		int i1 = entry[0]; // first
+
+		const Vector3 &pt0 = m_Points[i0];
+		const Vector3 &pt1 = m_Points[i1];
+
+		// create plane from 3 points
+		Plane p(pt0, pt1, lsource.m_ptPos);
+		planes.push_back(p); // pushing by value, urg!!
+	}
+	
+	
 
 	if (manager.m_bDebugLightVolumes)
 	{
@@ -611,7 +835,7 @@ bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LSource &lca
 			int i0 = entry[e];
 			const Vector3 &pt0 = m_Points[i0];
 
-			manager.m_DebugLightVolumes.push_back(lcam.m_ptPos);
+			manager.m_DebugLightVolumes.push_back(lsource.m_ptPos);
 			manager.m_DebugLightVolumes.push_back(pt0);
 
 			//print_line(String(pt0));
@@ -623,7 +847,6 @@ bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LSource &lca
 			LPRINT_RUN(2, "\t" + m_szPoints[i]);
 		}
 	}
-
 
 	return true;
 }
@@ -650,6 +873,8 @@ bool LMainCamera::Prepare(LRoomManager &manager, Camera * pCam)
 	{ CameraMatrix::PLANE_NEAR, CameraMatrix::PLANE_RIGHT, CameraMatrix::PLANE_BOTTOM },
 	};
 
+	m_ptCentre.zero();
+
 	for (int i = 0; i < 8; i++) {
 
 		Vector3 point;
@@ -659,9 +884,11 @@ bool LMainCamera::Prepare(LRoomManager &manager, Camera * pCam)
 		//m_Points[i] = p_transform.xform(point);
 		m_Points[i] = point;
 
+		m_ptCentre += point;
 //		print_line("point " + itos(i) + " " + String(point) + " -> " + String(m_Points[i]));
 	}
 
+	m_ptCentre *= 1.0f / 8.0f;
 
 #define PUSH_PT(a) manager.m_DebugFrustums.push_back(m_Points[a])
 

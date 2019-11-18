@@ -227,6 +227,30 @@ void LRoom::AddShadowCasters(LRoomManager &manager)
 	manager.DebugString_Add("\n");
 #endif
 
+	// NEW .. global area directional lights
+	// could be done with area bitflags... more efficiently
+	for (int n=0; n<m_GlobalLights.size(); n++)
+	{
+		int lightID = m_GlobalLights[n];
+		manager.Light_FrameProcess(lightID);
+	}
+
+/*
+	for (int n=0; n<m_Areas.size(); n++)
+	{
+		int areaID = m_Areas[n];
+		const LArea &area = manager.m_Areas[areaID];
+
+		int last_light = area.m_iFirstLight + area.m_iNumLights;
+
+		for (int l=area.m_iFirstLight; l<last_light; l++)
+		{
+			int lightID = manager.m_AreaLights[l];
+			manager.Light_FrameProcess(lightID);
+		}
+	}
+*/
+
 	// new!! use precalced list of shadow casters
 //	int last = m_iFirstShadowCaster_SOB + m_iNumShadowCasters_SOB;
 //	for (int n=m_iFirstShadowCaster_SOB; n<last; n++)
@@ -324,6 +348,18 @@ void LRoom::Release(LRoomManager &manager)
 	}
 
 }
+
+bool LRoom::IsInArea(int area) const
+{
+	for (int n=0; n<m_Areas.size(); n++)
+	{
+		if (m_Areas[n] == area)
+			return true;
+	}
+
+	return false;
+}
+
 
 // allows us to show / hide all dobs as the room visibility changes
 void LRoom::Room_MakeVisible(bool bVisible)

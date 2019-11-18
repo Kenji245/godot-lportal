@@ -63,6 +63,12 @@ public:
 	// local lights affecting this room
 	LVector<int> m_LocalLights;
 
+	// global lights affecting this room
+	LVector<int> m_GlobalLights;
+
+	// areas this room is in
+	LVector<int> m_Areas;
+
 	// portals are stored in the manager in a contiguous list
 	int m_iFirstPortal;
 	int m_iNumPortals;
@@ -133,6 +139,7 @@ public:
 	// and the camera will hide them with a cull mask. This is so that
 	// objects can still be rendered outside immediate view for casting shadows.
 	static void SoftShow(VisualInstance * pVI, uint32_t show_flags);
+	bool IsInArea(int area) const;
 
 private:
 	// whether lportal thinks this room is currently visible
