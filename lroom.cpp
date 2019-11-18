@@ -209,7 +209,8 @@ void LRoom::AddShadowCasters(LRoomManager &manager)
 	LPRINT_RUN(2, "ADDSHADOWCASTERS room " + get_name() + ", " + itos(m_iNumShadowCasters_SOB) + " shadow casters");
 
 #ifdef LDEBUG_LIGHT_AFFECTED_ROOMS
-	manager.DebugString_Add("Room " + itos(m_RoomID) + " local lights : ");
+	if (manager.m_bDebugFrameString)
+		manager.DebugString_Add("Room " + itos(m_RoomID) + " local lights : ");
 #endif
 
 	// add all the active lights in this room
@@ -219,12 +220,14 @@ void LRoom::AddShadowCasters(LRoomManager &manager)
 		manager.Light_FrameProcess(lightID);
 
 		#ifdef LDEBUG_LIGHT_AFFECTED_ROOMS
+		if (manager.m_bDebugFrameString)
 			manager.DebugString_Add(itos(lightID) + ", ");
 		#endif
 	}
 
 #ifdef LDEBUG_LIGHT_AFFECTED_ROOMS
-	manager.DebugString_Add("\n");
+	if (manager.m_bDebugFrameString)
+		manager.DebugString_Add("\n");
 #endif
 
 	// NEW .. global area directional lights

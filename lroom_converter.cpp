@@ -216,6 +216,14 @@ void LRoomConverter::Convert_Room_FindObjects_Recursive(Node * pParent, LRoom &l
 	{
 		Node * pChild = pParent->get_child(n);
 
+		// ignore invisible
+		Spatial * pSpatialChild = Object::cast_to<Spatial>(pChild);
+		if (pSpatialChild && (pSpatialChild->is_visible_in_tree() == false))
+		{
+			pSpatialChild->queue_delete();
+			continue;
+		}
+
 		// we are not interested in portal meshes, as they will be deleted later in conversion
 		if (Node_IsPortal(pChild))
 			continue;
@@ -448,6 +456,28 @@ bool LRoomConverter::Convert_Bound(LRoom &lroom, MeshInstance * pMI)
 
 void LRoomConverter::Convert_AreaLights()
 {
+	// list the rooms in each area
+	for (int a=0; a<LMAN->m_Areas.size(); a++)
+	{
+		LArea &area = LMAN->m_Areas[a];
+
+		// add every room in this area to the light affected rooms list
+		for (int r=0; r<LMAN->m_Rooms.size(); r++)
+		{
+			LRoom &room = LMAN->m_Rooms[r];
+			if (room.IsInArea(a))
+			{
+				// add the room to the area room list
+				if (area.m_iNumRooms == 0)
+					area.m_iFirstRoom = LMAN->m_AreaRooms.size();
+
+				area.m_iNumRooms += 1;
+				LMAN->m_AreaRooms.push_back(r);
+			}
+		}
+	}
+
+
 	// first identify which lights are area lights, and match area strings to area IDs
 	for (int n=0; n<LMAN->m_Lights.size(); n++)
 	{
@@ -525,7 +555,7 @@ void LRoomConverter::Convert_AreaLights()
 			LRoom &room = LMAN->m_Rooms[r];
 			if (room.IsInArea(areaID))
 			{
-				l.AddAffectedRoom(r);
+				//l.AddAffectedRoom(r); // no need as this is now done by area
 				LPRINT(5,"\t" + itos (r));
 
 				// store the global lights on the room

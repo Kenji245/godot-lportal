@@ -64,6 +64,7 @@ LRoomManager::LRoomManager()
 	m_bDebugLights = false;
 	m_bDebugLightVolumes = false;
 	m_bDebugFrustums = false;
+	m_bDebugFrameString = false;
 
 	m_pRoomList = 0;
 
@@ -852,7 +853,8 @@ int LRoomManager::dynamic_light_update(Node * pLightNode) // returns room within
 	if (pLightNode->is_inside_tree() == false)
 	{
 #ifdef LDEBUG_LIGHT_AFFECTED_ROOMS
-	DebugString_Add("DynamicLight not in tree\n");
+		if (m_bDebugFrameString)
+			DebugString_Add("DynamicLight not in tree\n");
 #endif
 		return -1;
 	}
@@ -966,18 +968,21 @@ int LRoomManager::dynamic_light_update(Node * pLightNode) // returns room within
 void LRoomManager::DebugString_Light_AffectedRooms(int light_id)
 {
 #ifdef LDEBUG_LIGHT_AFFECTED_ROOMS
-	const LLight &light = m_Lights[light_id];
-	if (!light.m_bShow)
-		return;
-
-	DebugString_Add("Light " + itos(light_id) + " affect room ");
-	// affected rooms
-	for (int n=0; n<light.m_NumAffectedRooms; n++)
+	if (m_bDebugFrameString)
 	{
-		int room_id = light.m_AffectedRooms[n];
-		DebugString_Add(itos(room_id) + ", ");
+		const LLight &light = m_Lights[light_id];
+		if (!light.m_bShow)
+			return;
+
+		DebugString_Add("Light " + itos(light_id) + " affect room ");
+		// affected rooms
+		for (int n=0; n<light.m_NumAffectedRooms; n++)
+		{
+			int room_id = light.m_AffectedRooms[n];
+			DebugString_Add(itos(room_id) + ", ");
+		}
+		DebugString_Add("\n");
 	}
-	DebugString_Add("\n");
 #endif
 }
 
@@ -1000,6 +1005,14 @@ bool LRoomManager::light_register(Node * pLightNode, String szArea)
 		WARN_PRINT_ONCE("light_register : Node is not a light");
 		return false;
 	}
+
+	DirectionalLight * pDLight = 	Object::cast_to<DirectionalLight>(pLightNode);
+	if (!pDLight)
+	{
+		WARN_PRINT_ONCE("light_register : only DirectionalLights are supported, place spotlights and omnis within rooms");
+		return false;
+	}
+
 /*
 	// find the area
 	int area = -1;
@@ -1166,7 +1179,7 @@ void LRoomManager::rooms_set_active(bool bActive)
 
 }
 
-String LRoomManager::rooms_get_debug_string()
+String LRoomManager::rooms_get_debug_frame_string()
 {
 	return m_szDebugString;
 }
@@ -1356,6 +1369,7 @@ void LRoomManager::ReleaseResources(bool bPrepareConvert)
 	m_SOBs.clear();
 
 	m_AreaLights.clear(true);
+	m_AreaRooms.clear(true);
 
 	if (!bPrepareConvert)
 		m_Lights.clear();
@@ -1478,7 +1492,8 @@ bool LRoomManager::FrameUpdate()
 	}
 
 #ifdef LDEBUG_CAMERA
-	DebugString_Add("Camera in room " + itos(pRoom->m_RoomID) + "\n");
+	if (m_bDebugFrameString)
+		DebugString_Add("Camera in room " + itos(pRoom->m_RoomID) + "\n");
 #endif
 
 
@@ -1612,7 +1627,8 @@ void LRoomManager::FrameUpdate_AddShadowCasters()
 	}
 
 #ifdef LDEBUG_LIGHTS
-	DebugString_Add("TOTAL shadow casters " + itos(m_CasterList_SOBs.size()) + "\n");
+	if (m_bDebugFrameString)
+		DebugString_Add("TOTAL shadow casters " + itos(m_CasterList_SOBs.size()) + "\n");
 #endif
 
 	LPRINT_RUN(2, "TOTAL shadow casters " + itos(m_CasterList_SOBs.size()));
@@ -1646,7 +1662,8 @@ void LRoomManager::FrameUpdate_FinalizeVisibility_SoftShow()
 
 
 #ifdef LDEBUG_LIGHTS
-	DebugString_Add("nActiveLights " + itos(m_ActiveLights.size()) + "\n");
+	if (m_bDebugFrameString)
+		DebugString_Add("nActiveLights " + itos(m_ActiveLights.size()) + "\n");
 #endif
 
 	// lights
@@ -1907,7 +1924,8 @@ void LRoomManager::_bind_methods()
 	ClassDB::bind_method(D_METHOD("rooms_set_debug_shadows", "active"), &LRoomManager::rooms_set_debug_shadows);
 	ClassDB::bind_method(D_METHOD("rooms_set_debug_frustums", "active"), &LRoomManager::rooms_set_debug_frustums);
 
-	ClassDB::bind_method(D_METHOD("rooms_get_debug_string"), &LRoomManager::rooms_get_debug_string);
+	ClassDB::bind_method(D_METHOD("rooms_set_debug_frame_string", "active"), &LRoomManager::rooms_set_debug_frame_string);
+	ClassDB::bind_method(D_METHOD("rooms_get_debug_frame_string"), &LRoomManager::rooms_get_debug_frame_string);
 
 	// lightmapping
 	ClassDB::bind_method(D_METHOD("rooms_convert_lightmap_internal", "proxy filename", "level filename"), &LRoomManager::rooms_convert_lightmap_internal);
@@ -2095,3 +2113,8 @@ IMPLEMENT_DEBUG_MESH(planes,Planes)
 #undef COMB_NX
 #undef COMB_IDENT
 #undef IMPLEMENT_DEBUG_MESH
+
+void LRoomManager::rooms_set_debug_frame_string(bool bActive)
+{
+	m_bDebugFrameString = bActive;
+}

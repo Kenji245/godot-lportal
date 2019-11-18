@@ -720,7 +720,8 @@ bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LSource &lso
 				{
 					//out_of_range = true;
 					//return false;
-					manager.DebugString_Add("Light culled cone start out of range .. source room" + itos(lsource.m_RoomID) + "\n");
+					if (manager.m_bDebugFrameString)
+						manager.DebugString_Add("Light culled cone start out of range .. source room" + itos(lsource.m_RoomID) + "\n");
 					goto LightCulled;
 				}
 
@@ -748,8 +749,11 @@ bool LMainCamera::AddCameraLightPlanes(LRoomManager &manager, const LSource &lso
 				{
 					//out_of_range = true;
 					//return false;
-					manager.DebugString_Add("Light culled cone end out of range .. source room" + itos(lsource.m_RoomID) + "\n");
-					manager.DebugString_Add("cone end radius " + ftos(radius_at_end) + ", dist_end " + ftos(dist_end) + "\n");
+					if (manager.m_bDebugFrameString)
+					{
+						manager.DebugString_Add("Light culled cone end out of range .. source room" + itos(lsource.m_RoomID) + "\n");
+						manager.DebugString_Add("cone end radius " + ftos(radius_at_end) + ", dist_end " + ftos(dist_end) + "\n");
+					}
 					goto LightCulled;
 				}
 			}

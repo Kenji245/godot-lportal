@@ -1,4 +1,6 @@
 // defines
+
+// frame debug strings
 #define LDEBUG_CAMERA
 #define LDEBUG_LIGHTS
 #define LDEBUG_LIGHT_AFFECTED_ROOMS

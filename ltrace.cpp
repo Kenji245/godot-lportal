@@ -224,6 +224,25 @@ bool LTrace::Trace_Light(LRoomManager &manager, const LLight &light, eLightRun e
 			// they instead have a predefined list of rooms governed by the area
 			m_TraceFlags |= DONT_TRACE_PORTALS;
 
+			// new .. trace according to area, not affected rooms, as affected rooms has a limit
+			assert (light.m_iArea != -1);
+			const LArea &area = LMAN->m_Areas[light.m_iArea];
+
+			int last_room = area.m_iFirstRoom + area.m_iNumRooms;
+
+			for (int r=area.m_iFirstRoom; r<last_room; r++)
+			{
+				int room_id = LMAN->m_AreaRooms[r];
+				LRoom * pRoom = manager.GetRoom(room_id);
+
+				// should not happen, assert?
+				assert (pRoom);
+
+				// trace as usual but don't go through the portals
+				Trace_Recursive(0, *pRoom, planes, 0);
+			}
+
+/*
 			// go through each affected room
 			for (int r=0; r<light.m_NumAffectedRooms; r++)
 			{
@@ -236,7 +255,7 @@ bool LTrace::Trace_Light(LRoomManager &manager, const LLight &light, eLightRun e
 				// trace as usual but don't go through the portals
 				Trace_Recursive(0, *pRoom, planes, 0);
 			}
-
+*/
 		} // if area light
 	} // if light in view
 

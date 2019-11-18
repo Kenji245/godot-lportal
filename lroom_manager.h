@@ -121,6 +121,9 @@ private:
 	// master list of lights affecting each area
 	LVector<uint32_t> m_AreaLights;
 
+	// master list of rooms in each area
+	LVector<uint32_t> m_AreaRooms;
+
 	// keep all the light rendering stuff together
 	struct LLightRender
 	{
@@ -167,6 +170,7 @@ private:
 	void DobChangeVisibility(Spatial * pDOB, const LRoom * pOld, const LRoom * pNew);
 	void ReleaseResources(bool bPrepareConvert);
 	void ShowAll(bool bShow);
+
 	void DebugString_Set(String sz) {m_szDebugString = sz;}
 	void DebugString_Add(String sz) {m_szDebugString += sz;}
 	void DebugString_Light_AffectedRooms(int light_id);
@@ -226,7 +230,9 @@ private:
 	Ref<SpatialMaterial> m_mat_Debug_Bounds;
 	Ref<SpatialMaterial> m_mat_Debug_LightVolumes;
 	Ref<SpatialMaterial> m_mat_Debug_Frustums;
+
 	String m_szDebugString;
+	bool m_bDebugFrameString;
 
 	// unchecked
 	Spatial * m_pRoomList;
@@ -291,10 +297,14 @@ public:
 	void rooms_set_debug_lights(bool bActive);
 	void rooms_set_debug_shadows(bool bActive);
 	void rooms_set_debug_frustums(bool bActive);
+	void rooms_set_debug_frame_string(bool bActive);
 
-	// 0 to 6 .. defaults to 4 which is (2) in our priorities (i.e. 6 - level)
+	// 0 to 6 .. less to more
+	// defaults to 4 which is (2) in our priorities (i.e. 6 - level)
 	void rooms_set_logging(int level);
-	String rooms_get_debug_string();
+
+	// optionally lportal can output some debug info in a string each frame
+	String rooms_get_debug_frame_string();
 
 	// provide debugging output on the next frame
 	void rooms_log_frame();
